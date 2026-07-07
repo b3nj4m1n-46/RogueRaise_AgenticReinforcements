@@ -2,9 +2,9 @@
 metadata:
   created_at:   2026-07-07T07:32:20-07:00
   activated_at: 2026-07-07T07:33:03-07:00
-  planned_at:
+  planned_at:   2026-07-07T07:44:01-07:00
   finished_at:
-  updated_at:   2026-07-07T07:33:03-07:00
+  updated_at:   2026-07-07T07:44:01-07:00
 -->
 
 # Story: Admin Sponsor Curation Queue
@@ -40,4 +40,51 @@ SO THAT approved events advance to secondary intake with no manual coordination,
 
 ## Implementation Plan
 
-[to be filled in by /stories plan]
+### Overview
+
+Add a WR Admin curation queue mirroring story 1's domain-module discipline: a new privileged `admin-actions.ts` with two `useActionState`-shaped server actions that do all writes in one `db.transaction`, send email only after commit via `Promise.allSettled`, and log two PII-free audit rows per decision (application + event). Approve mints a hashed, event-scoped `sponsor_poc` magic-link token and emails an intake invite; reject sends a courteous decline. Three new Server-Component routes (`/admin/sponsors`, `/admin/sponsors/[id]`, stub `/sponsor/intake/[eventId]`). No schema migration needed.
+
+### Resolved decisions
+
+- **`under_review`:** NOT auto-set on view (GET must not mutate; no per-admin identity yet). Valid actionable input status; nothing sets it in v1 — its filter tab may be empty. Explicit "Start review" deferred.
+- **Idempotency:** `SELECT … FOR UPDATE` the application row inside the transaction, capture true prior status (audit `fromValue`), guard on `{submitted, under_review}`. Row lock serializes concurrent admins — no double transitions/emails.
+- **Event transition:** persist straight to `intake_pending` on approve (no phantom committed `approved` state); audit records real `from → intake_pending`, `metadata.via = "approved"`. Reject → `rejected`.
+- **Token:** `randomBytes(32).toString("base64url")` raw → stored as HMAC-SHA256(raw, `RR_MAGIC_LINK_SECRET`) hex, in a shared helper the next (redemption) story imports. TTL 14 days. Raw token appears ONLY in the emailed URL — never audited or logged.
+- **URL base:** from `BETTER_AUTH_URL` env, never the request Host header. URL: `/sponsor/intake/[eventId]?token=…`.
+- **Admin note:** optional, internal-only (`sponsorApplications.adminNote`); never echoed into POC emails.
+- **Actions location:** new `admin-actions.ts` separate from public `actions.ts` (trust-boundary clarity). Actor constant `ACTOR_WR_ADMIN = "wr-admin"` (placeholder until auth story).
+- **Confirm UX:** inline expanding confirm panel (no modal); both Approve and Reject confirm; Reject copy conveys terminality. Rejection is final in v1 (no undo).
+- **Default queue filter:** `submitted`. Approve-email failure recovery (resend) deferred to the intake story; failure is audit-logged + visible.
+
+### Steps
+
+1. **Magic-link helper — `src/lib/rogue-raise/sponsors/magic-link.ts` (+ test):** `generateMagicToken()` → `{raw, hash}`; `hashMagicToken(raw)` HMAC-SHA256 w/ `RR_MAGIC_LINK_SECRET`; `buildIntakeInviteUrl(eventId, raw)` from `BETTER_AUTH_URL`; `MAGIC_LINK_TTL_MS = 14d`; `SPONSOR_POC_ROLE`. Redemption (next story) must reuse this helper + `timingSafeEqual`.
+2. **Schema + guards — extend `src/lib/rogue-raise/sponsors/schema.ts`:** `adminDecisionSchema = { note: trim max 2000 optional }`; pure `isActionableAppStatus()` over `["submitted","under_review"]` and `allowedNextStatus(current, decision)` with `assertNever` exhaustiveness.
+3. **Admin actions — `src/lib/rogue-raise/sponsors/admin-actions.ts`:** `"use server"`; approve/reject actions reading only `application_id`, `decision`, `note` (never a client eventId/status — resolve event via `events.sponsorApplicationId`, **refuse if ≠1 events resolve**). Transaction: FOR UPDATE lock → guard → update app (status + adminNote) → update event → (approve) insert `magicLinkTokens` → two audit rows. Not-actionable → `{ok:false, formError:"This application has already been decided."}`. Post-commit: `Promise.allSettled` email, failure audited (`…email_failed`, actor `system`), never rolled back. Then `revalidatePath("/admin")` + `revalidatePath("/admin/sponsors")` + `redirect("/admin/sponsors")` (outside try/catch).
+4. **Email builders — extend `src/lib/rogue-raise/sponsors/emails.ts`:** `buildIntakeInviteEmail` ("approved; your intake form opens soon"; URL in href) + `buildDeclineEmail` (courteous, barn-raise ethos; no note echo). Reuse `escapeHtml`/`stripCrlf`; fixed subjects.
+5. **Queue — `src/app/admin/sponsors/page.tsx` + `loading.tsx`:** Server Component, `force-dynamic`; validate `?status=` against enum (default `submitted`); innerJoin organizations, `ORDER BY submitted_at DESC NULLS LAST, created_at DESC`; grouped count query for filter badges. No pagination (low volume).
+6. **Detail — `src/app/admin/sponsors/[id]/page.tsx`:** Server Component, `force-dynamic`; app + org + linked event + stakeholders; `notFound()` on missing/malformed id; all Part 1 fields (`<dl>` contact w/ mailto:/tel:, long text `whitespace-pre-wrap`, stakeholder list); decided → resolved banner (outcome + timestamp/actor from audit_log + adminNote) instead of actions.
+7. **Decision island — `src/app/admin/sponsors/[id]/decision-form.tsx`:** `"use client"`, `useActionState` + `useFormStatus`; inline confirm panels w/ shared optional-note `Field`/`Textarea`; focus into panel on open, back to trigger on Cancel/Esc.
+8. **Intake stub — `src/app/sponsor/intake/[eventId]/page.tsx`:** branded "your intake form opens soon" page (email link must not hard-404); `Referrer-Policy: no-referrer` (token in query).
+9. **Auth guardrail — `src/middleware.ts` + env + HANDOFF:** match `/admin/:path*`, hard-refuse unless `RR_ADMIN_DEV_OPEN === "true"` (on in local `.env` only). Add `RR_ADMIN_DEV_OPEN` to `.env.example`. HANDOFF: `/admin/*` must NOT deploy publicly until the auth story lands; redemption must use `timingSafeEqual`.
+10. **Admin badge:** verify only — existing `force-dynamic` count + step 3's `revalidatePath` covers it.
+
+### Design & UX
+
+Queue: semantic `<table>` desktop / card list mobile (`md:`); `max-w-5xl`, eyebrow + serif h1 pattern; one tab stop per row (stretched org-name link); rows show submitted date (disambiguates same-name orgs). Status pills always text-labeled: Submitted → ink on `secondary`; Under review → `muted-foreground` on `muted`; Approved → white on `primary`; Rejected → white on `destructive`; never white on base olive. Filter = `<nav>` of query-param Links w/ count badges, `aria-current="page"` + non-color indicator. Financial: format from decimal string; `toDiscuss` → "To discuss"; null → "—". Detail: `max-w-3xl`, sectioned, back link. Reject trigger outline w/ destructive label; in-panel confirm `variant="destructive"` named "Confirm rejection — this cannot be undone". States: empty queue/filter, pending (`aria-busy`), resolved banner, PRG redirect + `role="status"` flash, inline error on failure.
+
+### Accessibility
+
+Real `<table>` w/ `<caption>` (conveys sort), `th scope`, `aria-sort`, org cell `<th scope="row">`; single row link w/ disambiguating name. Confirm panel: labelled `role="group"`, trigger `aria-expanded`/`aria-controls`, focus into panel heading (`tabIndex=-1`), Esc/Cancel returns focus. Persistent live regions rendered on first paint: `role="status"` success / `role="alert"` error; `aria-busy` during submit; move focus to result region when the activated button disables. Already-decided: `aria-disabled` + `aria-describedby` reason (focusable), server guard is real enforcement. Note field via `Field` (`(optional)`, no `aria-invalid` for emptiness). One `<h1>` (org name on detail), ordered `<h2>`s, `mailto:`/`tel:` links, row targets ≥24px, buttons ≥36px.
+
+### Testing Strategy
+
+`admin-actions.test.ts` (integration, story-1 harness: dotenv first, real Postgres, mock next/headers + email adapter, `db.$client.end()` in afterAll; **cleanup order: magicLinkTokens + auditLog + stakeholders → events → sponsorApplications → organizations**): approve happy path (app `approved`, event `intake_pending`, exactly 1 token row, 2 audit rows w/ correct from→to, 1 email, NEXT_REDIRECT); reject happy path; idempotent guard (pre-decided → formError; assert token/audit/email COUNTS unchanged); forced mid-transaction throw → zero changes; stored hash === `hashMagicToken(raw)`, raw never in DB; email-failure → committed + `email_failed` audit + still redirects; note persisted / null when empty; refuse when ≠1 events resolve. Unit: `magic-link.test.ts` (uniqueness, base64url charset, hash determinism, URL shape, TTL); guard helpers; `adminDecisionSchema` (max cap, empty ok).
+
+### Risks
+
+- **No admin auth** — first surface with privileged, externally-visible actions; mitigated by env-gated middleware + HANDOFF deploy gate; must be un-missable in review.
+- **Approve-email failure** leaves `intake_pending` w/ unsent link — audited + visible; resend lands with intake story.
+- **14-day TTL** must outlast the gap until the intake form ships; intake story owns reissue.
+- **`events.sponsorApplicationId`** nullable/non-unique — action refuses on ≠1; consider a uniqueness migration later.
+- Multiple approved applications per org = multiple independent events (assumed intended; same-org warning out of scope).
