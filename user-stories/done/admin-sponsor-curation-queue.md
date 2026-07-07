@@ -3,8 +3,8 @@ metadata:
   created_at:   2026-07-07T07:32:20-07:00
   activated_at: 2026-07-07T07:33:03-07:00
   planned_at:   2026-07-07T07:44:01-07:00
-  finished_at:
-  updated_at:   2026-07-07T08:30:45-07:00
+  finished_at:  2026-07-07T08:39:29-07:00
+  updated_at:   2026-07-07T08:39:29-07:00
 -->
 
 # Story: Admin Sponsor Curation Queue
@@ -91,7 +91,7 @@ Real `<table>` w/ `<caption>` (conveys sort), `th scope`, `aria-sort`, org cell 
 
 ## Review
 
-**Date:** 2026-07-07 · **Commit reviewed:** fc2ac80 · Reviewers: product-manager + code-reviewer agents (Opus 4.8) · **Status: review complete; fixes NOT yet applied (loop paused here)**
+**Date:** 2026-07-07 · **Commit reviewed:** fc2ac80 · Reviewers: product-manager + code-reviewer agents (Opus 4.8) · **Status: review complete; all three fixes applied in a6fa20a**
 
 ### Acceptance criteria (PM verdicts)
 
@@ -99,7 +99,7 @@ All 10 ACs ✅ met, with two caveats: AC9 (brand/responsive/a11y) and AC10 (badg
 
 ### Code review (verdict: approve-with-nits)
 
-**Pending fixes (not yet applied — resume here):**
+**Fixes (applied in a6fa20a):**
 
 1. **`formatFinancial` cents bug** (`src/app/admin/sponsors/status-pill.tsx:69`) — `"5000.50"` renders `$5,000.5`. Fix: `minimumFractionDigits: Number.isInteger(n) ? 0 : 2`.
 2. **Silent magic-link secret fallback** (`src/lib/rogue-raise/sponsors/magic-link.ts:28`) — warn/fail-fast outside dev before the redemption story makes tokens a live security boundary.
@@ -108,3 +108,26 @@ All 10 ACs ✅ met, with two caveats: AC9 (brand/responsive/a11y) and AC10 (badg
 **Deferred by design:** post-commit email-send failure is invisible to admin and unrecoverable (resend lands with the intake/redemption story); no admin auth (env-gated middleware + HANDOFF deploy gate).
 
 **Verified correct:** FOR UPDATE lock + guards, honest from→to audit rows, NEXT_REDIRECT outside try/catch, middleware default-deny covering all /admin routes + action POSTs, 256-bit tokens/HMAC/URL-safe building, parameterized queries + UUID guard, genuine mid-transaction rollback test.
+
+## Learnings
+
+**What went well**
+
+- Story 1's conventions (domain module, transaction shape, email-after-commit, audit discipline, test harness) transferred wholesale — the plan could say "mirror story 1" and three agents produced consistent code with no drift.
+- `SELECT … FOR UPDATE` + a pure status-guard function made idempotency trivial to implement and to test; asserting *counts unchanged* (tokens/audit/emails) is a stronger idempotency test than asserting the error message.
+- The test agent found a genuinely clean rollback seam without touching source: mocking `generateMagicToken` (which runs after the UPDATEs inside the transaction) forces a true mid-transaction rollback — closing the exact gap story 1's review flagged.
+- In-browser verification (submit → queue → detail → open/cancel confirm panels → assert DB pristine) caught what unit tests can't: focus behavior, aria state, and console cleanliness.
+
+**What was surprising**
+
+- **Next 16 forbids non-async exports from `"use server"` modules** — this crashed at build/runtime, and the identical latent defect existed in story 1's committed code (its `/sponsor` form would have 500'd on this Next version). Constants/initial-state objects must live in plain sibling modules. This is now a project convention: `form-state.ts` / `admin-decision-state.ts`.
+- `revalidatePath` throws outside a Next render store — tests must mock `next/cache` once an action calls it (story 1's harness didn't need this).
+- Two parallel agents can safely touch the same test file when their edits are additive, but it worked by luck of ordering — next time give the test agent explicit ownership of test files and have the UI agent report needed test changes instead of making them.
+- The "event persists straight to intake_pending" reinterpretation (vs. the AC's literal two-step) survived both reviews because the *application* row still records `approved` and the audit trail is honest — writing the reasoning into the plan's "Resolved decisions" pre-empted the review objection.
+
+**Do differently next time**
+
+- Encode the `"use server"` export rule in CLAUDE.md so future stories don't rediscover it.
+- Give parallel agents disjoint file ownership, explicitly listed in both prompts.
+- The dead `under_review` filter tab (nothing sets that status in v1) is acceptable but should have been called out in the story's ACs up front rather than resolved in planning.
+- Carry-forwards for the intake/redemption story: reuse `hashMagicToken` + `timingSafeEqual`; email resend path for approve-email failures; consider a uniqueness migration for `events.sponsor_application_id`; prod deploy checklist must set `RR_MAGIC_LINK_SECRET` (now enforced by fail-fast).

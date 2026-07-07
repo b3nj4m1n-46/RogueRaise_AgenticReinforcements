@@ -254,8 +254,11 @@
     // one-liner preserved across regenerations (see /stories board).
     const stories = {
   backlog: [],
-  active:  [ { title: "Admin Sponsor Curation Queue", path: "current/admin-sponsor-curation-queue.md", story: "PRD 5.2.1 — review queue with approve/reject, event transitions, intake magic link." } ],
-  done:    [ { title: "Public Sponsor Sign-Up Form", path: "done/public-sponsor-sign-up.md", story: "Phase 1 front door — public /sponsor form creates the SponsorApplication + Event." } ],
+  active:  [],
+  done:    [
+    { title: "Admin Sponsor Curation Queue", path: "done/admin-sponsor-curation-queue.md", story: "PRD 5.2.1 — review queue with approve/reject, event transitions, intake magic link." },
+    { title: "Public Sponsor Sign-Up Form", path: "done/public-sponsor-sign-up.md", story: "Phase 1 front door — public /sponsor form creates the SponsorApplication + Event." }
+  ],
 };
 
     function render() {
