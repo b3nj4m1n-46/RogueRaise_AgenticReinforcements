@@ -593,7 +593,7 @@ Execute in order. Each milestone ends with its `AC`s green.
 2. **Judging = "real users too":** The public site says real users (not just judges) evaluate. Do community/user scores factor into tabulation, or are formal `JudgeScore`s the sole basis? (MVP assumes judges only.)
 3. **Financial commitment handling:** Is payment collected in-platform (e.g., Stripe) or handled offline? (MVP assumes offline; store amount + status only.)
 4. **Auto-posting social:** MVP drafts only. Confirm no direct IG/FB/X/Reddit publishing is required.
-5. **LOC definition:** Total lines across the default branch at submission time? Additions only? Language filters? (Affects Phase 4 stat.)
+5. ~~LOC definition~~ **DECIDED:** total lines on the **default branch at submission time**, excluding vendored (node_modules/lockfiles) and generated/build output, no language filter (all source languages). Per-event override allowed. See `agents/A8-submission-categorizer.md` → `DEFAULT_LOC_RULE`.
 6. **Repo ownership transfer:** Does the platform perform the actual GitHub ownership/transfer to the Stakeholder, or just link/download? (MVP: link + download; transfer is a `[COULD]`.)
 7. **Multiple concurrent events:** Confirm the platform must support several live Rogue Raises at once (data model assumes yes).
 8. ~~Mono-app vs. separate app~~ **DECIDED (§3.1):** separate standalone app now with local Postgres, handed to WR tech staff to merge later. Portability + mergeability are first-class.

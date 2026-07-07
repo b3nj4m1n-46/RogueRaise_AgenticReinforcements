@@ -309,7 +309,7 @@ No new tables are required for MVP. `[COULD]` add an `agent_review_comments` tab
 
 ## 7. Open Questions (Agent-Specific)
 
-1. **LOC definition (blocks A8):** total lines on default branch at submission time? additions only? language filters? exclude vendored/generated? (Same as `PRD.md` §16 #5 — must resolve for A8.)
+1. ~~LOC definition (blocks A8)~~ **DECIDED:** count lines on the **default branch at submission time**, **exclude vendored** (node_modules, vendored libs, lockfiles) and **generated/build output**, **no language filter** (count all source languages). Per-event override allowed. See `agents/A8-submission-categorizer.md` → `DEFAULT_LOC_RULE`.
 2. **Auto-send vs. draft-only:** confirmed MVP = draft-only for A5/A6 (no posting/sending without a human). Any exceptions (e.g., judge emails A3 auto-send after approval)? Current spec: A3 sends after approval; A5/A6 export only.
 3. **Research depth budget (A1):** how many sub-questions / sources / verify rounds per event before diminishing returns? Set a default (e.g., 6–10 sub-questions, 2 completeness rounds) and tune.
 4. **Repo hosting org (blocks A2):** confirm the WR GitHub org + GitHub App install with repo-create/push (same as `PRD.md` §16 #11).

@@ -64,8 +64,8 @@ Return A8Output (JSON).
 ## Guardrail checklist
 - [x] Read-only on participant repos  - [x] Graceful on private/unreachable (flag, don't fail)  - [x] Idempotent (overwrite stats per submission, no dupes)
 
-## Blocking open question — LOC rule
-Resolve before build (AGENTS_PRD §7 #1 / PRD §16 #5):
+## LOC rule — DECIDED (default accepted)
+Resolves AGENTS_PRD §7 #1 / PRD §16 #5.
 ```ts
 type LocRule = {
   scope: 'default_branch_snapshot' | 'additions_only';
@@ -74,4 +74,13 @@ type LocRule = {
   languageFilter?: string[];     // e.g., count only source langs
 };
 ```
-Suggested default: `default_branch_snapshot`, exclude vendored + generated, no language filter.
+**Accepted default:**
+```ts
+const DEFAULT_LOC_RULE: LocRule = {
+  scope: 'default_branch_snapshot',   // count lines on the default branch at submission time
+  excludeVendored: true,              // drop node_modules, vendored libs, lockfiles
+  excludeGenerated: true,             // drop generated/build output
+  languageFilter: undefined,          // count all source languages
+};
+```
+A8 uses `DEFAULT_LOC_RULE` unless an event overrides it.
