@@ -315,7 +315,7 @@ No new tables are required for MVP. `[COULD]` add an `agent_review_comments` tab
 4. **Repo hosting org (blocks A2):** confirm the WR GitHub org + GitHub App install with repo-create/push (same as `PRD.md` §16 #11).
 5. **Stakeholder review reach (A2):** do all Stakeholders review repo content, or a designated lead? Affects the gate's approval rule (any-one vs. all).
 6. **Deck tooling (A4):** generate `.pptx` directly, or Markdown → deck via a converter? Affects fidelity vs. editability.
-7. **Brand voice source:** is there a WR brand/voice guide to feed the outward-facing agents (A5–A7), or do we derive voice from the existing site copy?
+7. ~~Brand voice source~~ **DECIDED:** derive White Rabbit voice from the existing site copy. See `brand/BRAND_VOICE.md` (the derived guide) — outward-facing agents (A5–A7, and any participant/judge-facing copy) load it as the voice reference.
 
 ---
 
