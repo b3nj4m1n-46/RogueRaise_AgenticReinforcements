@@ -42,10 +42,8 @@ import {
   stakeholders,
 } from "../db/schema";
 import { getSpamGuard } from "../integrations/spam";
-import {
-  createSponsorApplication,
-  initialSponsorFormState,
-} from "./actions";
+import { createSponsorApplication } from "./actions";
+import { initialSponsorFormState } from "./form-state";
 import { slugify } from "./slug";
 
 // --- Test helpers -----------------------------------------------------------

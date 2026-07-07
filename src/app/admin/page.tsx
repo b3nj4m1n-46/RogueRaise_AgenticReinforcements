@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { count, eq } from "drizzle-orm";
 
 import { db } from "@/lib/rogue-raise/db";
@@ -31,13 +32,19 @@ export default async function AdminHomePage() {
         intake, agent runs, registration, judging, and handoff. Surfaces land
         here as their stories are built.
       </p>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <span className="inline-flex items-center gap-2 rounded-full border border-wr-olive-green px-4 py-2 text-sm font-medium text-ink">
           Sponsor applications to review
           <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-primary px-2 py-0.5 font-mono text-xs font-semibold text-primary-foreground">
             {submittedCount}
           </span>
         </span>
+        <Link
+          href="/admin/sponsors"
+          className="inline-flex min-h-9 items-center text-sm font-medium text-ink underline underline-offset-4 hover:text-primary"
+        >
+          Review queue →
+        </Link>
       </div>
     </main>
   );

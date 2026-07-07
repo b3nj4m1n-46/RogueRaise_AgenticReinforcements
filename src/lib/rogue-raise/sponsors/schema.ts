@@ -79,3 +79,72 @@ export const sponsorApplicationSchema = z.object({
 /** Fully-validated, parsed application (server-side shape after `safeParse`). */
 export type SponsorApplicationInput = z.infer<typeof sponsorApplicationSchema>;
 export type StakeholderInput = z.infer<typeof stakeholderSchema>;
+
+// ---------------------------------------------------------------------------
+// Admin curation (story 2) — decision schema + pure transition guards.
+//
+// These are appended, never modifying the exports above (63 tests depend on
+// them). The status literals mirror the `sponsor_app_status` / `event_status`
+// Postgres enums in db/schema.ts; kept as local literals so this module stays a
+// pure, DB-free schema importable by both client and server.
+// ---------------------------------------------------------------------------
+
+/** WR Admin's decision on an application. */
+export type AdminDecision = "approve" | "reject";
+
+/** Subset of `sponsor_app_status` this module reasons about. */
+export type SponsorAppStatus =
+  | "submitted"
+  | "under_review"
+  | "approved"
+  | "rejected";
+
+/** Subset of `event_status` an admin decision transitions an event to. */
+export type DecidedEventStatus = "intake_pending" | "rejected";
+
+/** Statuses on which Approve/Reject is still valid (idempotency window). */
+export const ACTIONABLE_APP_STATUSES = ["submitted", "under_review"] as const;
+
+/**
+ * Optional internal note captured with a decision. `trim`, capped at 2000 (DoS
+ * guard, not a storage limit — the column is unbounded `text`), and optional so
+ * an empty note is valid. Never echoed into POC-facing email.
+ */
+export const adminDecisionSchema = z.object({
+  note: z.string().trim().max(2000, "Note is too long").optional(),
+});
+export type AdminDecisionInput = z.infer<typeof adminDecisionSchema>;
+
+/** True when an application can still be approved/rejected. */
+export function isActionableAppStatus(status: string): boolean {
+  return (ACTIONABLE_APP_STATUSES as readonly string[]).includes(status);
+}
+
+/** Exhaustiveness guard — unreachable at runtime if the union is covered. */
+function assertNever(value: never): never {
+  throw new Error(`Unexpected decision: ${String(value)}`);
+}
+
+/**
+ * Resolve the target application + event statuses for a decision. Approve goes
+ * straight to `intake_pending` (no phantom committed `approved` state); reject is
+ * terminal. Throws if `current` is not actionable — callers gate with
+ * `isActionableAppStatus` first (the real enforcement is the row-locked guard in
+ * the server action).
+ */
+export function allowedNextStatus(
+  current: SponsorAppStatus,
+  decision: AdminDecision,
+): { appStatus: SponsorAppStatus; eventStatus: DecidedEventStatus } {
+  if (!isActionableAppStatus(current)) {
+    throw new Error(`Application in status "${current}" cannot be decided`);
+  }
+  switch (decision) {
+    case "approve":
+      return { appStatus: "approved", eventStatus: "intake_pending" };
+    case "reject":
+      return { appStatus: "rejected", eventStatus: "rejected" };
+    default:
+      return assertNever(decision);
+  }
+}

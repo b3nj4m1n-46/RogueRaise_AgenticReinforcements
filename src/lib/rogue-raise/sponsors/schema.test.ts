@@ -294,3 +294,92 @@ describe("sponsorApplicationSchema", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Admin curation (story 2) — decision schema + pure transition guards.
+// Appended describe blocks only; the 63 pre-existing cases above are untouched.
+// ---------------------------------------------------------------------------
+
+import {
+  adminDecisionSchema,
+  allowedNextStatus,
+  isActionableAppStatus,
+  type SponsorAppStatus,
+} from "@/lib/rogue-raise/sponsors/schema";
+
+describe("adminDecisionSchema", () => {
+  it("accepts an omitted note (optional)", () => {
+    const result = adminDecisionSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.note).toBeUndefined();
+  });
+
+  it("accepts an empty-string note (trims to empty, stays valid)", () => {
+    const result = adminDecisionSchema.safeParse({ note: "" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.note).toBe("");
+  });
+
+  it("accepts a note at exactly 2000 chars", () => {
+    expect(
+      adminDecisionSchema.safeParse({ note: "a".repeat(2000) }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a note at 2001 chars", () => {
+    expect(
+      adminDecisionSchema.safeParse({ note: "a".repeat(2001) }).success,
+    ).toBe(false);
+  });
+
+  it("trims surrounding whitespace from the note", () => {
+    const result = adminDecisionSchema.safeParse({ note: "  looks great  " });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.note).toBe("looks great");
+  });
+});
+
+describe("isActionableAppStatus", () => {
+  it.each(["submitted", "under_review"])("returns true for %s", (status) => {
+    expect(isActionableAppStatus(status)).toBe(true);
+  });
+
+  it.each(["approved", "rejected"])("returns false for %s", (status) => {
+    expect(isActionableAppStatus(status)).toBe(false);
+  });
+
+  it("returns false for an unknown status", () => {
+    expect(isActionableAppStatus("draft")).toBe(false);
+  });
+});
+
+describe("allowedNextStatus", () => {
+  it.each(["submitted", "under_review"] as const)(
+    "approve from %s → app approved, event intake_pending",
+    (current) => {
+      expect(allowedNextStatus(current, "approve")).toEqual({
+        appStatus: "approved",
+        eventStatus: "intake_pending",
+      });
+    },
+  );
+
+  it.each(["submitted", "under_review"] as const)(
+    "reject from %s → app rejected, event rejected (terminal)",
+    (current) => {
+      expect(allowedNextStatus(current, "reject")).toEqual({
+        appStatus: "rejected",
+        eventStatus: "rejected",
+      });
+    },
+  );
+
+  it.each(["approved", "rejected"] as const)(
+    "throws for a non-actionable current status (%s)",
+    (current) => {
+      expect(() =>
+        allowedNextStatus(current as SponsorAppStatus, "approve"),
+      ).toThrow();
+    },
+  );
+});

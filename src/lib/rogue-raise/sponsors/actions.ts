@@ -63,8 +63,8 @@ export interface SponsorFormState {
   values?: SponsorFormValues;
 }
 
-/** Initial state for `useActionState(createSponsorApplication, initialSponsorFormState)`. */
-export const initialSponsorFormState: SponsorFormState = { ok: false };
+// `initialSponsorFormState` lives in `./form-state` — a `"use server"` module may
+// only export async functions, so a value export here would throw at runtime.
 
 // --- Helpers ---------------------------------------------------------------
 

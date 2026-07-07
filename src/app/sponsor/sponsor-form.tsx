@@ -11,9 +11,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createSponsorApplication,
-  initialSponsorFormState,
   type SponsorFinancialMode,
 } from "@/lib/rogue-raise/sponsors/actions";
+import { initialSponsorFormState } from "@/lib/rogue-raise/sponsors/form-state";
 import {
   AMOUNT_REGEX,
   sponsorApplicationSchema,

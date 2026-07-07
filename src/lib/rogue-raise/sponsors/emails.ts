@@ -101,3 +101,111 @@ export function buildAdminNotifyEmail(data: SponsorEmailData): SendEmailInput {
     html,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Admin curation (story 2) — decision emails to the sponsor POC.
+//
+// Same security posture as above: every echoed value is HTML-escaped in the
+// body, subjects are fixed strings (no user interpolation), and no internal
+// admin note is ever echoed. Both go through the `email` adapter seam.
+// ---------------------------------------------------------------------------
+
+/** Data the approval intake-invite email needs. `intakeUrl` carries the raw token. */
+export interface IntakeInviteEmailData {
+  orgName: string;
+  pocName: string;
+  pocEmail: string;
+  intakeUrl: string;
+}
+
+/** Data the courteous decline email needs. No note, no reasons echoed. */
+export interface DeclineEmailData {
+  orgName: string;
+  pocName: string;
+  pocEmail: string;
+}
+
+const INTAKE_INVITE_SUBJECT =
+  "Your Rogue Raise is approved — let's begin intake";
+
+const DECLINE_SUBJECT = "An update on your Rogue Raise application";
+
+/**
+ * Sent on approve. Announces the decision and links to the (future) intake form.
+ * The form route may not be live yet — the copy says so and notes the 14-day
+ * expiry so the POC knows the link is personal and time-bound.
+ */
+export function buildIntakeInviteEmail(
+  data: IntakeInviteEmailData,
+): SendEmailInput {
+  const org = escapeHtml(data.orgName);
+  const name = escapeHtml(data.pocName);
+  const url = escapeHtml(data.intakeUrl);
+  const html = [
+    `<p>Hi ${name},</p>`,
+    `<p>Good news &mdash; the Rogue Raise for <strong>${org}</strong> has been ` +
+      `approved. The next step is a short intake form so we can shape the build ` +
+      `around your goals.</p>`,
+    `<p><a href="${url}">Open your intake form</a></p>`,
+    `<p>Your intake form opens soon; if that link isn&rsquo;t live yet, keep this ` +
+      `email and try again shortly. The link is personal to you and expires in ` +
+      `14 days.</p>`,
+    `<p>&mdash; The White Rabbit team</p>`,
+  ].join("\n");
+  const text =
+    `Hi ${data.pocName},\n\n` +
+    `Good news — the Rogue Raise for ${data.orgName} has been approved. ` +
+    `The next step is a short intake form so we can shape the build around your goals.\n\n` +
+    `Open your intake form:\n${data.intakeUrl}\n\n` +
+    `Your intake form opens soon; if that link isn't live yet, keep this email ` +
+    `and try again shortly. The link is personal to you and expires in 14 days.\n\n` +
+    `— The White Rabbit team`;
+
+  return {
+    to: data.pocEmail,
+    subject: INTAKE_INVITE_SUBJECT,
+    html,
+    text,
+  };
+}
+
+/**
+ * Sent on reject. Genuinely courteous, in the barn-raise spirit — we take on a
+ * few builds at a time so each gets real focus, and we mean it when we say we'd
+ * welcome them back. No note, no reasons, no false promises.
+ */
+export function buildDeclineEmail(data: DeclineEmailData): SendEmailInput {
+  const org = escapeHtml(data.orgName);
+  const name = escapeHtml(data.pocName);
+  const html = [
+    `<p>Hi ${name},</p>`,
+    `<p>Thank you for putting <strong>${org}</strong> forward for a Rogue Raise. ` +
+      `We gave your application real consideration, and after review we&rsquo;re ` +
+      `not able to take it on this round.</p>`,
+    `<p>That isn&rsquo;t a verdict on the worth of your work. We run a small number ` +
+      `of builds at a time so each one gets the focus a barn-raise deserves &mdash; ` +
+      `the aim is always to raise something that lasts alongside a community, not ` +
+      `to spread ourselves thin.</p>`,
+    `<p>We&rsquo;d genuinely welcome hearing from you again as our capacity opens ` +
+      `up. Thank you for wanting to build something real with the people around you.</p>`,
+    `<p>&mdash; The White Rabbit team</p>`,
+  ].join("\n");
+  const text =
+    `Hi ${data.pocName},\n\n` +
+    `Thank you for putting ${data.orgName} forward for a Rogue Raise. We gave your ` +
+    `application real consideration, and after review we're not able to take it on ` +
+    `this round.\n\n` +
+    `That isn't a verdict on the worth of your work. We run a small number of builds ` +
+    `at a time so each one gets the focus a barn-raise deserves — the aim is always ` +
+    `to raise something that lasts alongside a community, not to spread ourselves thin.\n\n` +
+    `We'd genuinely welcome hearing from you again as our capacity opens up. Thank you ` +
+    `for wanting to build something real with the people around you.\n\n` +
+    `— The White Rabbit team`;
+
+  return {
+    to: data.pocEmail,
+    subject: DECLINE_SUBJECT,
+    html,
+    text,
+  };
+}
