@@ -46,7 +46,11 @@ export interface SpamGuard {
 const MIN_ELAPSED_MS = 3_000; // faster than 3s == almost certainly a bot.
 const MAX_ELAPSED_MS = 60 * 60 * 1_000; // older than 1h == stale/replayed.
 
-function getSecret(): string {
+/**
+ * Shared secret for challenge signing. Exported so callers that need a salt
+ * (e.g. IP hashing in the sponsor action) reuse the same never-empty fallback.
+ */
+export function getSpamSecret(): string {
   return (
     process.env.RR_SPAM_SECRET ??
     process.env.RR_MAGIC_LINK_SECRET ??
@@ -55,7 +59,7 @@ function getSecret(): string {
 }
 
 function sign(renderedAt: string): string {
-  return createHmac("sha256", getSecret()).update(renderedAt).digest("hex");
+  return createHmac("sha256", getSpamSecret()).update(renderedAt).digest("hex");
 }
 
 function signaturesMatch(expected: string, actual: string): boolean {

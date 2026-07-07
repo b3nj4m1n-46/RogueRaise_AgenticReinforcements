@@ -15,6 +15,7 @@ import {
   type SponsorFinancialMode,
 } from "@/lib/rogue-raise/sponsors/actions";
 import {
+  AMOUNT_REGEX,
   sponsorApplicationSchema,
   stakeholderSchema,
 } from "@/lib/rogue-raise/sponsors/schema";
@@ -22,8 +23,6 @@ import {
 // --- Client-side (UX-only) validation --------------------------------------
 // Reuses the shared zod schema so fast inline feedback matches the server's
 // authority exactly. The server always re-validates; this never gates submit.
-
-const AMOUNT_REGEX = /^\d{1,10}(\.\d{1,2})?$/;
 
 type TopField =
   | "orgName"

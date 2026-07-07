@@ -12,7 +12,7 @@ import { z } from "zod";
 export const E164_REGEX = /^\+[1-9]\d{6,14}$/;
 
 /** Amount as a numeric STRING to preserve `numeric(12,2)` precision (never a JS float). */
-const AMOUNT_REGEX = /^\d{1,10}(\.\d{1,2})?$/;
+export const AMOUNT_REGEX = /^\d{1,10}(\.\d{1,2})?$/;
 
 export const stakeholderSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(200, "Name is too long"),

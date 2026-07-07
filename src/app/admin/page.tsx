@@ -34,7 +34,7 @@ export default async function AdminHomePage() {
       <div className="flex items-center gap-3">
         <span className="inline-flex items-center gap-2 rounded-full border border-wr-olive-green px-4 py-2 text-sm font-medium text-ink">
           Sponsor applications to review
-          <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-wr-olive-green px-2 py-0.5 font-mono text-xs font-semibold text-white">
+          <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-primary px-2 py-0.5 font-mono text-xs font-semibold text-primary-foreground">
             {submittedCount}
           </span>
         </span>

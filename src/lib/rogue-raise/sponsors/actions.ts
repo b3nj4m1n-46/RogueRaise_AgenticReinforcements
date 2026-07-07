@@ -26,7 +26,7 @@ import {
   stakeholders,
 } from "../db/schema";
 import { getEmailAdapter } from "../integrations/email";
-import { getSpamGuard } from "../integrations/spam";
+import { getSpamGuard, getSpamSecret } from "../integrations/spam";
 import { buildAdminNotifyEmail, buildPocAckEmail } from "./emails";
 import { slugify } from "./slug";
 import { sponsorApplicationSchema } from "./schema";
@@ -114,8 +114,9 @@ async function hashClientIp(): Promise<string> {
   const forwarded = hdrs.get("x-forwarded-for");
   const ip =
     forwarded?.split(",")[0]?.trim() || hdrs.get("x-real-ip") || "unknown";
-  const salt =
-    process.env.RR_SPAM_SECRET ?? process.env.RR_MAGIC_LINK_SECRET ?? "";
+  // Same never-empty fallback chain as challenge signing — an empty salt would
+  // degrade this to an unsalted (rainbow-table-able) hash of the IPv4 space.
+  const salt = getSpamSecret();
   return createHash("sha256").update(`${ip}:${salt}`).digest("hex").slice(0, 32);
 }
 
@@ -150,11 +151,14 @@ export async function createSponsorApplication(
     sig: str(formData, "challenge_sig"),
   });
   if (!spam.ok) {
-    return {
-      ok: false,
-      formError: "We couldn't verify your submission. Please try again.",
-      values,
-    };
+    // A stale challenge (form left open > 1h) is a legitimate-user path, not a
+    // bot signal — tell them how to recover. Everything else stays generic so
+    // the guard's logic is never revealed.
+    const formError =
+      spam.reason === "too_old"
+        ? "This form has been open for a while and your session expired. Please refresh the page — your entries will need to be re-entered."
+        : "We couldn't verify your submission. Please try again.";
+    return { ok: false, formError, values };
   }
 
   // 2. Server-side re-validation (mandatory — client validation is UX only).
