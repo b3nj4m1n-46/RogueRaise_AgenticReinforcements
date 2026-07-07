@@ -74,10 +74,13 @@ export function formatFinancial(
   if (amount === null) return "—";
   const n = Number(amount);
   if (!Number.isFinite(n)) return amount;
+  // Whole dollars drop ".00"; any cents render as exactly two digits
+  // (min 0 / max 2 would show "5000.50" as "$5,000.5").
+  const whole = Number.isInteger(n);
   return n.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 0,
+    minimumFractionDigits: whole ? 0 : 2,
     maximumFractionDigits: 2,
   });
 }

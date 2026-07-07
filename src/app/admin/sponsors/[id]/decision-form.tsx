@@ -119,11 +119,12 @@ function DecisionPanel({
   }, [isOpen]);
 
   // On a server failure, pull focus to the (already-present) error region so the
-  // assertive message is both announced and where the caret sits.
-  const formError = state.formError;
+  // assertive message is both announced and where the caret sits. Keyed on the
+  // `state` object (fresh identity per action return), not the message string —
+  // a repeat submit failing with the *same* error must still re-focus/announce.
   useEffect(() => {
-    if (isOpen && formError) errorRef.current?.focus();
-  }, [isOpen, formError]);
+    if (isOpen && state.formError) errorRef.current?.focus();
+  }, [isOpen, state]);
 
   const noteError = state.fieldErrors?.note?.[0];
 
@@ -191,9 +192,9 @@ function DecisionPanel({
               role="alert"
               className="outline-none empty:hidden"
             >
-              {formError ? (
+              {state.formError ? (
                 <p className="rounded-md border border-destructive bg-destructive/5 px-3 py-2 text-sm font-medium text-destructive">
-                  {formError}
+                  {state.formError}
                 </p>
               ) : null}
             </div>

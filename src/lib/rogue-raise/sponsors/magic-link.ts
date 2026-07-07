@@ -21,16 +21,23 @@ export const MAGIC_LINK_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
  * Signing secret for token hashing. Prefers `RR_MAGIC_LINK_SECRET` (its dedicated
- * env), then falls back to `RR_SPAM_SECRET`, then a loud dev default — the same
+ * env), then falls back to `RR_SPAM_SECRET`, then a dev default — the same
  * never-empty fallback discipline as `getSpamSecret`, but with magic-link's own
  * secret FIRST so the two seams can diverge in prod.
+ *
+ * Outside development the committed default is a real vulnerability (token
+ * hashes become forgeable), so production fails fast instead of falling back.
  */
 export function getMagicLinkSecret(): string {
-  return (
-    process.env.RR_MAGIC_LINK_SECRET ??
-    process.env.RR_SPAM_SECRET ??
-    "dev-magic-link-secret-change-me"
-  );
+  const secret =
+    process.env.RR_MAGIC_LINK_SECRET ?? process.env.RR_SPAM_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "RR_MAGIC_LINK_SECRET (or RR_SPAM_SECRET) must be set in production — magic-link tokens signed with the public dev default are forgeable.",
+    );
+  }
+  return "dev-magic-link-secret-change-me";
 }
 
 /** HMAC-SHA256(raw) as lowercase hex — the value stored in `token_hash`. */
