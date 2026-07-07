@@ -1,8 +1,23 @@
+import { count, eq } from "drizzle-orm";
+
+import { db } from "@/lib/rogue-raise/db";
+import { sponsorApplications } from "@/lib/rogue-raise/db/schema";
+
 export const metadata = {
   title: "Admin · Rogue Raise",
 };
 
-export default function AdminHomePage() {
+// The submitted-application count must be live on every visit — no static cache.
+export const dynamic = "force-dynamic";
+
+export default async function AdminHomePage() {
+  // COUNT query (never findMany().length) — seed of the M2 curation queue.
+  const [row] = await db
+    .select({ value: count() })
+    .from(sponsorApplications)
+    .where(eq(sponsorApplications.status, "submitted"));
+  const submittedCount = row?.value ?? 0;
+
   return (
     <main className="mx-auto flex min-h-full max-w-2xl flex-col justify-center gap-6 px-6 py-24">
       <p className="eyebrow font-mono text-xs uppercase tracking-widest text-wr-olive-green">
@@ -16,6 +31,14 @@ export default function AdminHomePage() {
         intake, agent runs, registration, judging, and handoff. Surfaces land
         here as their stories are built.
       </p>
+      <div className="flex items-center gap-3">
+        <span className="inline-flex items-center gap-2 rounded-full border border-wr-olive-green px-4 py-2 text-sm font-medium text-ink">
+          Sponsor applications to review
+          <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-wr-olive-green px-2 py-0.5 font-mono text-xs font-semibold text-white">
+            {submittedCount}
+          </span>
+        </span>
+      </div>
     </main>
   );
 }

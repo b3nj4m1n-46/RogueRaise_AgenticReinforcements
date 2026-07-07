@@ -19,9 +19,87 @@
   --font-sans: var(--font-rr-sans), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-rr-serif), ui-serif, Georgia, serif;
   --font-mono: var(--font-rr-mono), ui-monospace, "JetBrains Mono", monospace;
+
+  /*
+   * Semantic (shadcn-expected) token layer mapped onto the WR palette. shadcn's
+   * generated primitives reference these via utilities like `bg-primary`,
+   * `border-input`, `text-destructive`, `ring-ring`, etc.
+   *
+   * Accessibility contract (verified against the #fbfaf6 paper background):
+   *   - Olive (#6f7d3f) is used ONLY for non-text/graphical roles here — borders,
+   *     rings, radio indicators — where AA needs 3:1 (olive→paper ≈ 4.29:1 ✓).
+   *   - `--color-primary` is a slightly deepened olive (#697939) reserved for the
+   *     filled submit button, so its WHITE label clears AA for small text
+   *     (white→#697939 ≈ 4.78:1 ✓); the exact brand olive stays on borders/rings.
+   *   - `--color-destructive` (#b91c1c) is error text/borders: ≈ 6.19:1 on paper ✓.
+   *   - `--color-muted-foreground` (#6b6b63) placeholders/help ≈ 5.15:1 on paper ✓.
+   */
+  --color-primary: #697939;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #eceadf;
+  --color-secondary-foreground: var(--color-ink);
+
+  --color-muted: #f0efe6;
+  --color-muted-foreground: #6b6b63;
+
+  --color-accent: #f0efe6;
+  --color-accent-foreground: var(--color-ink);
+
+  --color-destructive: #b91c1c;
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: var(--color-wr-olive-green);
+  --color-input: var(--color-wr-olive-green);
+  --color-ring: var(--color-wr-olive-green);
+
+  --color-card: var(--color-background);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-background);
+  --color-popover-foreground: var(--color-ink);
+
+  /* Corner radii (shadcn new-york convention). */
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 body {
   background: var(--color-background);
   color: var(--color-foreground);
+}
+
+/*
+ * Robust keyboard-focus fallback: shadcn primitives paint their own olive ring,
+ * but we guarantee an always-visible focus indicator with a high-contrast ink
+ * outline (ink→paper ≈ 15:1, far above the 3:1 non-text minimum). Belt and
+ * suspenders — if a ring is ever clipped/overridden, focus stays visible.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/* Honeypot: kept off-screen (never `display:none`, so bots still see + fill it). */
+.rr-honeypot {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Respect users who ask for less motion (WCAG 2.3.3 / brand courtesy). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
