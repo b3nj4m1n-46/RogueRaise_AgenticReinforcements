@@ -1,0 +1,64 @@
+# HANDOFF.md — merging Rogue Raise into whiterabbitashland.com
+
+This app was built standalone (own local Postgres, own Next.js app) so the full
+flow works on a laptop with no WR credentials, then hands cleanly to WR tech
+staff to merge into the main site (PRD §3.1). This guide is the merge contract.
+
+## Portability seams
+
+Everything WR-specific is isolated behind a small number of seams — swap these,
+not feature code:
+
+- **Database** — a single `DATABASE_URL`. Local Postgres in dev, Neon at merge;
+  no code change. All tables are namespaced under a dedicated **`rogue_raise`
+  Postgres schema** so they drop into WR's Neon DB without colliding. Plain
+  Postgres only (no local-only extensions).
+- **Feature code** lives under movable segments:
+  - `src/app/rogue-raise/*` — public hub + event surfaces
+  - `src/app/admin/*` — WR staff console
+  - `src/lib/rogue-raise/*` — all server logic, DB, integrations
+- **External services** are behind thin adapters in
+  `src/lib/rogue-raise/integrations/*` (email, blob, ai-gateway, github, auth),
+  each env-driven. See that folder's README for the provider/env matrix.
+- **Auth** — built on Better Auth (WR's existing layer). At merge, point at WR's
+  Better Auth config/instance instead of the local one; our `rogue_raise` rows
+  reference that identity rather than storing their own.
+- **Design tokens** — WR Tailwind tokens (`wr-olive-green`, `ink`, Fraunces,
+  JetBrains Mono) are vendored in `src/app/globals.css` + `src/app/layout.tsx`.
+  Confirm exact hex against the live site before launch.
+
+## Environment variables
+
+See `.env.example` for the full list with inline notes. Groups: database, Better
+Auth (+ magic-link secret), AI Gateway (+ model ids), Resend email, Vercel Blob,
+GitHub App.
+
+## Schema & migrations
+
+- Schema: `src/lib/rogue-raise/db/schema.ts` (Drizzle, `rogue_raise` pgSchema).
+- Config: `drizzle.config.ts` (`schemaFilter: ['rogue_raise']`, out `./drizzle`).
+- Migrations live in `./drizzle`. Drizzle owns these migrations end to end.
+- At merge, confirm which Neon database/branch the `rogue_raise` schema lands in.
+
+## Local dev
+
+```bash
+npm run db:up        # start local postgres:16 (docker compose)
+npm install
+npm run db:generate  # generate SQL migrations from the schema
+npm run db:migrate   # apply migrations to local Postgres
+npm run dev          # http://localhost:3000  ->  /rogue-raise
+```
+
+`npm run db:studio` opens Drizzle Studio; `npm run db:down` stops the DB.
+
+## Merge checklist
+
+- [ ] Lift `src/app/rogue-raise/*`, `src/app/admin/*`, `src/lib/rogue-raise/*`
+      into the WR app (single cohesive segment).
+- [ ] Point `DATABASE_URL` at the agreed Neon database/branch; run migrations.
+- [ ] Repoint the `auth` adapter at WR's Better Auth instance.
+- [ ] Fill real credentials for AI Gateway, Resend, Vercel Blob, GitHub App.
+- [ ] Confirm the WR GitHub org name + install the GitHub App with repo-create/
+      push permissions.
+- [ ] Verify design tokens match the live site exactly.

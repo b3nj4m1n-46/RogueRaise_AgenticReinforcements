@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/*
+ * White Rabbit design tokens (PRD §3 / §13), vendored so this app already
+ * matches whiterabbitashland.com and merges cleanly.
+ *
+ * NOTE: the hex values below are close approximations of the observed WR palette
+ * (`wr-olive-green`, `ink` near-black). Confirm exact values against the live
+ * site before launch — the token *names* are the stable contract; the values are
+ * trivial to correct here.
+ */
+@theme {
+  --color-wr-olive-green: #6f7d3f;
+  --color-ink: #1a1a17;
+
+  --color-background: #fbfaf6;
+  --color-foreground: var(--color-ink);
+
+  --font-sans: var(--font-rr-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-rr-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-rr-mono), ui-monospace, "JetBrains Mono", monospace;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
