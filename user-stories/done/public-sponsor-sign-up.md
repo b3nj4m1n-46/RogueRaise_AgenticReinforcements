@@ -3,8 +3,8 @@ metadata:
   created_at:   2026-07-06T19:24:50-07:00
   activated_at: 2026-07-06T19:35:55-07:00
   planned_at:   2026-07-06T19:42:49-07:00
-  finished_at:
-  updated_at:   2026-07-06T19:42:49-07:00
+  finished_at:  2026-07-07T07:28:23-07:00
+  updated_at:   2026-07-07T07:28:23-07:00
 -->
 
 # Story: Public Sponsor Sign-Up Form
@@ -119,3 +119,53 @@ Real `<label htmlFor>` everywhere; stakeholder rows in `<fieldset><legend>Stakeh
 - **Duplicates:** only rapid resubmit is rejected (disabled button + PRG); a later second application from the same org is a valid new lead.
 - **Email failure UX:** user still sees success (record saved); failure audit-logged; no retry queue this story.
 - **Test isolation:** shared local DB + per-test cleanup now; dedicated `DATABASE_URL_TEST` as follow-up.
+
+## Review
+
+**Date:** 2026-07-07 · **Commit reviewed:** 57ec6c9 (fixes applied in 2a9b622) · Reviewers: product-manager + code-reviewer agents (Opus 4.8)
+
+### Acceptance criteria
+
+| # | Criterion | Verdict | Evidence |
+|---|-----------|---------|----------|
+| 1 | Public `/sponsor`, WR-themed, responsive, no h-scroll | ⚠️ met; 1 manual check | Route + tokens + `min-w-0` grid guards in place; remaining manual check: 320px width & 400% zoom |
+| 2 | All Part 1 fields captured | ✅ | All fields rendered, parsed, validated (E.164 via shared regex) |
+| 3 | Repeatable stakeholders, min 1, add/remove | ✅ | Controlled rows, Remove hidden at 1, Add capped at 20, schema min/max |
+| 4 | Single shared zod schema client+server | ✅ | One schema both sides; amount-regex duplication fixed in 2a9b622 |
+| 5 | One transaction: application + org link/create + event | ✅ | Single `db.transaction`; proven by integration tests (links, statuses, org reuse) |
+| 6 | POC ack email via adapter | ✅ | Exact subject per story; post-commit send; dev adapter is the documented M0 seam |
+| 7 | Admin notification (email + badge) | ✅ | RR_ADMIN_NOTIFY_EMAIL send + live COUNT badge on /admin (contrast fixed in 2a9b622) |
+| 8 | Spam protection | ⚠️ reinterpreted (authorized) | Honeypot + HMAC-signed timestamp per story Notes; `getSpamGuard()` seam confirmed for BotID/hCaptcha swap |
+| 9 | Audit-logged | ✅ | actor/action/entity/toValue/timestamp in transaction; ids + salted ipHash only, no PII |
+| 10 | Duplicates/invalid rejected gracefully, full rollback | ⚠️ partially | Invalid → zero rows proven; mid-transaction rollback untested (rests on Postgres semantics); org-level "duplicate" is a valid new lead by documented decision |
+
+### Code review findings (verdict: approve-with-nits)
+
+Fixed post-review (2a9b622): **badge contrast** (major — white-on-olive 4.49:1 < AA), **IP-hash empty-salt fallback**, **stale-challenge lockout messaging**, **client AMOUNT_REGEX duplication**.
+
+Accepted/deferred: org link-or-create race under concurrency (documented v1 gap; needs `lower(name)` unique index + upsert if it bites); mid-transaction rollback test; audit-metadata PII assertion test; `discuss`-mode DB-shape test; error summary `role="alert"`+focus double-announce (minor SR polish).
+
+Strengths confirmed: clean server/client boundary (no secret leak), NEXT_REDIRECT outside try/catch, HTML-escape + CRLF-strip in emails, length-guarded `timingSafeEqual`, PII-free audit metadata.
+
+## Learnings
+
+**What went well**
+
+- The M0 walking skeleton paid off exactly as intended: schema, adapters, tokens, and Vitest all existed, so the story was pure feature work — no yak-shaving mid-implementation.
+- Splitting implementation into server-domain → (UI ∥ tests) with an explicit written contract (FormData field names, exported types, fieldError key shape) let the two downstream agents work in parallel with zero integration friction.
+- Writing the plan's field caps, XOR rule, and transaction order into the story file made the plan the single authority — three different agents executed against it without drift.
+- Adversarial review earned its cost: it caught a real WCAG AA regression (badge contrast) that contradicted the design system's own documented contract, plus three cheap hardening wins.
+
+**What was surprising**
+
+- zod v4's `flattenError` is lossy for nested/array paths — per-row stakeholder errors required building dot-path fieldErrors directly from `issues`. Worth remembering for every future multi-row form.
+- `redirect()` throwing NEXT_REDIRECT shapes the whole action's error handling (and its tests) — success-as-throw must be designed in, not bolted on.
+- Testing the 3s spam floor without sleeping needed a backdated challenge minted under fake timers, then real timers for the DB calls — fake timers and network I/O don't mix.
+- Client-random UUIDs are fine as React keys but must not become DOM ids (SSR hydration mismatch); useId+index for ids, UUID for keys.
+
+**Do differently next time**
+
+- Include a mid-transaction rollback test in the plan's test list from the start (the "zero rows" tests all rejected pre-transaction; atomicity went unverified).
+- Export every shared constant (AMOUNT_REGEX) from the schema module immediately — "single source of truth" erodes one convenient re-declaration at a time.
+- Story ACs should name the dev-phase spam mechanism directly instead of "BotID or hCaptcha" + a Notes escape hatch — reviewers flag the mismatch otherwise.
+- Consider a dedicated DATABASE_URL_TEST before the next story with integration tests; per-test FK-ordered cleanup works but is brittle as tables accumulate.
