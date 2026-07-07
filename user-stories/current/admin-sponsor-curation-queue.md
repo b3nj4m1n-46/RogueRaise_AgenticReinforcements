@@ -4,7 +4,7 @@ metadata:
   activated_at: 2026-07-07T07:33:03-07:00
   planned_at:   2026-07-07T07:44:01-07:00
   finished_at:
-  updated_at:   2026-07-07T07:44:01-07:00
+  updated_at:   2026-07-07T08:30:45-07:00
 -->
 
 # Story: Admin Sponsor Curation Queue
@@ -88,3 +88,23 @@ Real `<table>` w/ `<caption>` (conveys sort), `th scope`, `aria-sort`, org cell 
 - **14-day TTL** must outlast the gap until the intake form ships; intake story owns reissue.
 - **`events.sponsorApplicationId`** nullable/non-unique — action refuses on ≠1; consider a uniqueness migration later.
 - Multiple approved applications per org = multiple independent events (assumed intended; same-org warning out of scope).
+
+## Review
+
+**Date:** 2026-07-07 · **Commit reviewed:** fc2ac80 · Reviewers: product-manager + code-reviewer agents (Opus 4.8) · **Status: review complete; fixes NOT yet applied (loop paused here)**
+
+### Acceptance criteria (PM verdicts)
+
+All 10 ACs ✅ met, with two caveats: AC9 (brand/responsive/a11y) and AC10 (badge refresh) are correct-by-construction and browser-verified during implementation but have no automated coverage. AC4's "approved → intake_pending" two-step is honored via the documented reinterpretation: application row genuinely becomes `approved`; event persists straight to `intake_pending` with an honest audit trail (no phantom committed state).
+
+### Code review (verdict: approve-with-nits)
+
+**Pending fixes (not yet applied — resume here):**
+
+1. **`formatFinancial` cents bug** (`src/app/admin/sponsors/status-pill.tsx:69`) — `"5000.50"` renders `$5,000.5`. Fix: `minimumFractionDigits: Number.isInteger(n) ? 0 : 2`.
+2. **Silent magic-link secret fallback** (`src/lib/rogue-raise/sponsors/magic-link.ts:28`) — warn/fail-fast outside dev before the redemption story makes tokens a live security boundary.
+3. **Repeated identical decision error won't re-focus/re-announce** (`decision-form.tsx` focus effect keys on `[isOpen, formError]`) — add a submit counter to deps.
+
+**Deferred by design:** post-commit email-send failure is invisible to admin and unrecoverable (resend lands with the intake/redemption story); no admin auth (env-gated middleware + HANDOFF deploy gate).
+
+**Verified correct:** FOR UPDATE lock + guards, honest from→to audit rows, NEXT_REDIRECT outside try/catch, middleware default-deny covering all /admin routes + action POSTs, 256-bit tokens/HMAC/URL-safe building, parameterized queries + UUID guard, genuine mid-transaction rollback test.
