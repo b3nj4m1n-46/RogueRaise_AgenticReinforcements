@@ -491,6 +491,8 @@ All transactional and bulk email flows in one place. Bulk sends go through a **q
 
 ## 11. AI Agent Layer (Specification) `[MUST for repo+judge email; SHOULD for deck/marketing]`
 
+> **See `AGENTS_PRD.md` for the full agent specification** — per-agent triggers, inputs, tools, models, workflow steps, guardrails, orchestration, and acceptance criteria. This section is the summary; the companion doc governs agent behavior.
+
 ### 11.1 Execution Model
 
 - Every agent task is an **`AgentRun`** record: `id`, `event_id`, `type`, `status` (`queued/running/paused_for_review/succeeded/failed`), `inputs`, `outputs` (→ `GeneratedAsset`), `logs`, `cost_tokens`, `started_at`, `finished_at`.
