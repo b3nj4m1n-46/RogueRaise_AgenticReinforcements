@@ -1,0 +1,27 @@
+# Local development database for Rogue Raise.
+# Neon-compatible plain Postgres 16 — no local-only extensions (see PRD §3.1).
+# The whole app talks to this via a single DATABASE_URL, so pointing at Neon
+# later is a one-env-var change.
+services:
+  postgres:
+    image: postgres:16
+    container_name: rogue-raise-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rogue
+      POSTGRES_PASSWORD: rogue
+      POSTGRES_DB: rogue_raise
+    # Host port 5433 (not 5432) to avoid colliding with a developer's own local
+    # Postgres. The container port stays 5432; only the host mapping differs.
+    ports:
+      - "5433:5432"
+    volumes:
+      - rogue_raise_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rogue -d rogue_raise"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  rogue_raise_pgdata:
