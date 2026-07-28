@@ -113,7 +113,9 @@ export function buildExamplePrdPrompt(brief: EventBrief): DocumentPrompt {
   return {
     system: `${HOUSE_STYLE}
 
-You are writing an EXAMPLE PRD — one plausible, weekend-sized project a team could take on, written the way a good PRD reads: the problem, who it's for, what it does, what it explicitly does not do, and how you'd know it worked. It is an example to spark ideas, not an assignment: say so in one line at the top. Scope it to what a small team can genuinely finish between Friday evening and Sunday afternoon.
+You are writing EXAMPLE PRDs — two or three plausible, weekend-sized projects a team could take on, of clearly varying ambition (one a confident team could finish by Saturday lunch, one that would take the whole weekend). Each is written the way a good PRD reads: the problem, who it's for, what it does, what it explicitly does not do, and how you'd know it worked.
+
+Open with one line saying these are examples to spark ideas, not assignments. Then start each PRD with a heading of exactly the form \`## PRD: <short name>\` — they are split into separate files on that marker, so a PRD without it will be merged into the previous one. Use ordinary \`###\` headings for the sections inside each PRD. Scope each to what a small team can genuinely finish between Friday evening and Sunday afternoon.
 
 Markdown. No preamble.`,
     prompt: buildBriefBlock(brief),

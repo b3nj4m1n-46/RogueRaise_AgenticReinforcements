@@ -103,6 +103,35 @@ the request timeout** (~300s on Fluid Compute). `runAgent` is the seam: a durabl
 adapter replaces the handler-invocation step; the gate and the persistence steps
 are unchanged.
 
+### GitHub App
+
+Repo provisioning goes through `integrations/github.ts`. With the
+`RR_GITHUB_APP_*` credentials set it authenticates as a **GitHub App
+installation** (never a PAT): a short-lived RS256 JWT is exchanged for an
+installation token, which creates the repo, commits the file tree, and opens the
+PR. Without credentials it uses a **local provider** that writes the same tree
+under `RR_LOCAL_GITHUB_DIR`; production refuses it, because a "repository" that
+is really a folder on an ephemeral disk fails silently at exactly the moment
+participants need the repo.
+
+**The App provider has never run against real credentials** — it follows the
+documented REST API and is typechecked, but every test exercises the local
+provider. Smoke-test it when the App is first installed.
+
+Setup: create a GitHub App in the WR org with **Contents: read & write**,
+**Pull requests: read & write**, and **Administration: read & write** (repo
+creation); install it on the org; then set `RR_GITHUB_APP_ID`,
+`RR_GITHUB_APP_INSTALLATION_ID`, `RR_GITHUB_ORG`, and
+`RR_GITHUB_APP_PRIVATE_KEY` (PEM with literal `\n` escapes).
+
+Repos are created **private** and made public only when the repo review is
+approved. Every file is scanned for credential material before the push, and a
+hit aborts the whole provisioning rather than pushing a partial tree.
+
+**Not implemented:** PRD §5.3.1 asks for research documents with *verifiable,
+reachable citations* (a URL-check pass). The research agent does not do web
+research or citation checking yet — that arrives with the real AI provider.
+
 ### AI model access
 
 All model calls go through `integrations/ai-gateway.ts` using `"provider/model"`
@@ -160,5 +189,6 @@ npm run dev          # http://localhost:3000  ->  /rogue-raise
       validate-only posture in writing.
 - [ ] Replace the URL-borne intake token with a Better Auth `magicLink` session.
 - [ ] Confirm the WR GitHub org name + install the GitHub App with repo-create/
-      push permissions.
+      push permissions, then **smoke-test provisioning** — the App provider has
+      only ever run against the local disk provider.
 - [ ] Verify design tokens match the live site exactly.

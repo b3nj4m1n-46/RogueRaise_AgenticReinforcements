@@ -12,9 +12,15 @@ import {
 import { totalCostForEvent } from "@/lib/rogue-raise/agents/runs";
 import { loadAdminEvent } from "@/lib/rogue-raise/events/queries";
 import { eventStatusLabel } from "@/lib/rogue-raise/events/status";
+import { loadContextRepo } from "@/lib/rogue-raise/repo/queries";
+import {
+  canProvisionRepo,
+  describeProvisioningBlockers,
+} from "@/lib/rogue-raise/repo/provision";
 import { cn } from "@/lib/utils";
 
 import { AgentRunner } from "./agent-runner";
+import { RepoCard } from "./repo-card";
 
 export const metadata = { title: "Agents · Rogue Raise" };
 export const dynamic = "force-dynamic";
@@ -70,10 +76,12 @@ export default async function AdminEventAgentsPage({
   const event = await loadAdminEvent(id);
   if (!event) notFound();
 
-  const [runs, assetGroups, costTokens] = await Promise.all([
+  const [runs, assetGroups, costTokens, contextRepo, blockers] = await Promise.all([
     listAgentRuns(id),
     listAssetGroups(id),
     totalCostForEvent(id),
+    loadContextRepo(id),
+    describeProvisioningBlockers(id),
   ]);
 
   const runsByType = new Map<string, typeof runs>();
@@ -176,6 +184,20 @@ export default async function AdminEventAgentsPage({
           </ul>
         )}
       </section>
+
+      <RepoCard
+        eventId={id}
+        blockers={blockers}
+        repoUrl={contextRepo?.githubRepoUrl ?? null}
+        pullRequestUrl={contextRepo?.openPrUrl ?? null}
+        isPublic={contextRepo?.isPublic ?? false}
+        canProvision={canProvisionRepo(event.status)}
+        phaseReason={
+          canProvisionRepo(event.status)
+            ? null
+            : `The repo is built once the intake is complete and the documents are approved. This event is ${eventStatusLabel(event.status)}.`
+        }
+      />
 
       {/* --- The catalog --- */}
       <section aria-labelledby="catalog" className="flex flex-col gap-4">
