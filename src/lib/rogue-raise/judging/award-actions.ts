@@ -173,8 +173,13 @@ export async function announceAward(
     metadata: { awardId },
   });
 
+  // Only the admin's own results view is revalidated. Announcing is also what
+  // makes an award appear in the stakeholder portal (`portal/queries.ts` filters
+  // on `announcedAt`), but revalidating `/portal/${eventId}` from here would do
+  // nothing: the portal is `force-dynamic`, so it re-renders on every request
+  // anyway, and the Router Cache this would clear belongs to the admin's
+  // session, not the stakeholder's.
   revalidatePath(`/admin/events/${eventId}/results`);
-  revalidatePath(`/admin/events/${eventId}/winners`);
   return { ok: true };
 }
 
@@ -210,8 +215,8 @@ export async function reopenAward(
     metadata: { awardId },
   });
 
+  // See `announceAward` for why the portal is not revalidated here.
   revalidatePath(`/admin/events/${eventId}/results`);
-  revalidatePath(`/admin/events/${eventId}/winners`);
   return { ok: true };
 }
 

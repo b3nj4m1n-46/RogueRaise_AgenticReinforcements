@@ -147,8 +147,10 @@ describe("resend provider", () => {
     );
     // Callers log per-recipient failures; "422" alone tells a staff member
     // nothing about what to fix.
+    // `[\s\S]` rather than `.` + the `s` flag: Resend's reason can span lines,
+    // and dotAll needs ES2018 while this project targets ES2017.
     await expect(getEmailAdapter().send(MESSAGE)).rejects.toThrow(
-      /422.*domain is not verified/s,
+      /422[\s\S]*domain is not verified/,
     );
   });
 
