@@ -17,7 +17,8 @@
     "db:studio": "drizzle-kit studio",
     "admin:create": "tsx scripts/create-admin.ts",
     "db:auth-migrate": "drizzle-kit migrate --config drizzle.auth.config.ts",
-    "db:auth-generate": "drizzle-kit generate --config drizzle.auth.config.ts"
+    "db:auth-generate": "drizzle-kit generate --config drizzle.auth.config.ts",
+    "verify:providers": "tsx scripts/verify-providers.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.23",

@@ -16,7 +16,9 @@ portal, with the admin console behind real Better Auth sign-in.
 
 Known gaps are listed in HANDOFF.md, not hidden. The remaining ones are almost
 all the same shape: **the AI Gateway, GitHub App, Resend, and Blob providers have
-never run against real credentials.** Each is implemented behind an adapter with
+never run against real credentials.** `npm run verify:providers` is that
+checklist as executable code — run it the moment keys exist; it reports
+*skipped*, never *passed*, for anything unconfigured. Each is implemented behind an adapter with
 a labelled dev provider that production refuses, so the risk is a wrong API
 detail rather than missing code — they are smoke-test items on the merge
 checklist. Beyond that: the durable-run path (`agents/dispatch.ts`) needs the

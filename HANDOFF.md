@@ -288,6 +288,35 @@ Set `RR_ADMIN_DEV_OPEN="true"` in `.env` to skip sign-in locally.
 
 `npm run db:studio` opens Drizzle Studio; `npm run db:down` stops the DB.
 
+## Verifying the providers — one command
+
+```bash
+npm run verify:providers             # read-side checks
+npm run verify:providers -- --write   # also send/upload (has effects)
+```
+
+Four integrations — AI Gateway, GitHub App, Resend, Vercel Blob — are
+implemented and unit-tested against their dev providers, and **none has run
+against a real key**, because none existed in the environment they were built
+in. `scripts/verify-providers.ts` is this document's smoke-test list as
+executable code: every check is a real call to a real service, each failure
+prints what to do about it, and the script exits non-zero so it can gate a
+deploy.
+
+It reports **skipped, never passed**, for anything unconfigured. A green run
+with four skips means nothing has been verified.
+
+The check most likely to fail first is `AI Gateway: live web search` — the
+search tool's revision (`webSearch_20260209`) is dated and model-specific. If a
+model rejects it, find the revision it accepts in `@ai-sdk/anthropic` and update
+`integrations/ai-gateway.ts`. **Do not drop the tool**: research documents would
+silently go back to citing from recall, which is the failure §5.3.1 exists to
+prevent.
+
+Creating a GitHub repo is deliberately not automated here — it would leave an
+artifact in the WR org. Provision one real event from the console instead, then
+delete the repo.
+
 ## Merge checklist
 
 - [ ] Lift `src/app/rogue-raise/*`, `src/app/admin/*`, `src/lib/rogue-raise/*`
@@ -301,10 +330,10 @@ Set `RR_ADMIN_DEV_OPEN="true"` in `.env` to skip sign-in locally.
 - [ ] Confirm `RR_ADMIN_DEV_OPEN` is unset in every deployed environment (it is
       ignored in production, but leaving it set is misleading).
 - [ ] Fill real credentials for AI Gateway, Resend, Vercel Blob, GitHub App.
-- [ ] **Smoke-test the AI Gateway provider** with a real key — it has only ever
-      run against the dev provider.
-- [ ] **Smoke-test the Vercel Blob provider** with a real `BLOB_READ_WRITE_TOKEN`
-      and confirm uploads never fall back to local disk in production.
+- [ ] **`npm run verify:providers -- --write`** with real credentials. Nothing
+      below this line is verified until that run is green.
+- [ ] Confirm uploads never fall back to local disk in production (the adapter
+      throws rather than degrading, but confirm the throw is never reached).
 - [ ] Set `RR_WORKFLOWS_ENABLED="true"` once deployed, and confirm the
       context-research agent completes durably.
 - [ ] Set `RR_MAGIC_LINK_SECRET` — magic-link hashing fails fast without it in
