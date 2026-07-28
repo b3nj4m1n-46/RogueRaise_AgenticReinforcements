@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# rogue raise — local Blob provider (dev only; production uses Vercel Blob)
+/.rr-blob/
+
+# playwright-mcp browser session output (screenshots, snapshots, console logs)
+/.playwright-mcp/

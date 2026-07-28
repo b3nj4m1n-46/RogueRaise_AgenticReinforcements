@@ -27,17 +27,29 @@ Approve mints a `rogue_raise.magic_link_tokens` row: role `sponsor_poc`,
 event-scoped, **hashed** token (`HMAC-SHA256`), **14-day TTL**. The raw token
 appears **only** in the emailed intake URL — never stored, logged, or audited.
 
-The intake **redemption** story (next) MUST reuse the shared helper in
-`src/lib/rogue-raise/sponsors/magic-link.ts`:
+Redemption lives in `src/lib/rogue-raise/intake/access.ts`. It hashes the
+incoming raw token with the shared `hashMagicToken`, looks the row up by hash,
+re-compares with `crypto.timingSafeEqual`, and scopes the result to one event and
+one role — a valid token for Event A is refused on Event B.
 
-- hash the incoming raw token with `hashMagicToken` and compare against the
-  stored `token_hash` with `crypto.timingSafeEqual` — **never** a plain `===`
-  (timing oracle);
-- reject expired (`expires_at`), consumed (`consumed_at`), or revoked
-  (`revoked_at`) tokens; set `consumed_at` on successful single use.
+**The sponsor intake link is deliberately multi-use.** The form is resumable
+across sittings (PRD §5.2.2), so `consumed_at` is never set for `sponsor_poc`;
+`expires_at` (14 days) and `revoked_at` are the controls. `consumed_at` stays
+reserved for genuinely single-use flows.
 
-Token reissue/resend (if the 14-day window lapses before intake ships) is owned
-by the intake story.
+### ⚠️ The intake token travels in the URL
+
+`/sponsor/intake/[eventId]?token=…` carries the raw token as a query parameter. A
+cookie exchange isn't possible during a Server Component render, and the emailed
+URL shape shipped with the approve action. The exposure is contained, not
+ignored: the page sets `referrer: no-referrer` and `robots: noindex`, the token
+is never logged/audited/echoed into email, and every write re-verifies it
+server-side. **When Better Auth's `magicLink` plugin lands, replace this seam** —
+it should establish a session and drop the token from the URL.
+
+Token reissue/resend (if the 14-day window lapses, or the approval email failed
+to send) is still unbuilt; it needs an admin surface and is owned by the admin
+intake-review story.
 
 ## Portability seams
 
@@ -55,6 +67,23 @@ not feature code:
 - **External services** are behind thin adapters in
   `src/lib/rogue-raise/integrations/*` (email, blob, ai-gateway, github, auth),
   each env-driven. See that folder's README for the provider/env matrix.
+- **File storage** — `integrations/blob.ts` picks its provider from the
+  environment. With `BLOB_READ_WRITE_TOKEN` set it selects the Vercel Blob
+  provider; with no token it uses a **local-disk provider** (`RR_LOCAL_BLOB_DIR`,
+  default `.rr-blob/`) so a laptop runs the upload flow with no credentials.
+  **In production with no token it throws rather than writing to an ephemeral
+  filesystem.** Callers persist the opaque `ref` the adapter returns — never a
+  path — so switching providers is config, not a data migration.
+  **⚠️ The Vercel Blob provider is not implemented yet**: install `@vercel/blob`
+  and fill in `unwiredVercelBlobAdapter` before the first deploy that accepts
+  uploads. Intake attachments are private in both providers and are served only
+  through the token-gated route
+  `/sponsor/intake/[eventId]/attachments/[attachmentId]`
+  (`Content-Disposition: attachment` + `nosniff`, never inline).
+- **Malware scanning is NOT wired.** Uploads are validated by extension, declared
+  MIME, and magic-byte sniff (`intake/uploads.ts`), which stops a renamed
+  executable but is not a virus scan. `scanUpload()` is the single seam a real
+  scanner hooks into; wiring it needs no call-site changes.
 - **Auth** — built on Better Auth (WR's existing layer). At merge, point at WR's
   Better Auth config/instance instead of the local one; our `rogue_raise` rows
   reference that identity rather than storing their own.
@@ -94,6 +123,13 @@ npm run dev          # http://localhost:3000  ->  /rogue-raise
 - [ ] Point `DATABASE_URL` at the agreed Neon database/branch; run migrations.
 - [ ] Repoint the `auth` adapter at WR's Better Auth instance.
 - [ ] Fill real credentials for AI Gateway, Resend, Vercel Blob, GitHub App.
+- [ ] **Implement the Vercel Blob provider** in `integrations/blob.ts` (it throws
+      today) and confirm uploads never fall back to local disk in production.
+- [ ] Set `RR_MAGIC_LINK_SECRET` — magic-link hashing fails fast without it in
+      production, by design.
+- [ ] Decide on malware scanning for sponsor uploads, or accept the documented
+      validate-only posture in writing.
+- [ ] Replace the URL-borne intake token with a Better Auth `magicLink` session.
 - [ ] Confirm the WR GitHub org name + install the GitHub App with repo-create/
       push permissions.
 - [ ] Verify design tokens match the live site exactly.
