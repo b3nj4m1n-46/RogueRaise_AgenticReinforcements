@@ -324,6 +324,42 @@ export function getGithubAdapter(): GithubAdapter {
   return adapter;
 }
 
+/**
+ * Does this GitHub account exist?
+ *
+ * Deliberately NON-BLOCKING and three-valued. GitHub's user endpoint is rate
+ * limited (heavily so unauthenticated), and a registration form that turns a
+ * rate limit into "your username is wrong" would turn our problem into the
+ * participant's. So: `true` / `false` when we actually know, `"unknown"` when
+ * we couldn't find out — and the caller lets `"unknown"` through.
+ */
+export async function checkGithubUser(
+  username: string,
+): Promise<true | false | "unknown"> {
+  const config = readAppConfig();
+  try {
+    const headers: Record<string, string> = {
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+    };
+    // An installation token raises the rate limit substantially; without one
+    // the unauthenticated endpoint still answers, just less often.
+    if (config) {
+      headers.authorization = `Bearer ${await installationToken(config)}`;
+    }
+    const response = await fetch(
+      `${GITHUB_API}/users/${encodeURIComponent(username)}`,
+      { headers, signal: AbortSignal.timeout(4000) },
+    );
+    if (response.status === 404) return false;
+    if (response.ok) return true;
+    return "unknown";
+  } catch {
+    // Network failure, timeout, or a rate limit — all "we don't know".
+    return "unknown";
+  }
+}
+
 /** Test seam — resets provider selection and the cached installation token. */
 export function resetGithubAdapter(): void {
   adapter = undefined;

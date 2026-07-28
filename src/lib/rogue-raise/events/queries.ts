@@ -19,6 +19,7 @@ import {
   events,
   judges,
   organizations,
+  participants,
   sponsorApplications,
   stakeholders,
   techSponsors,
@@ -39,6 +40,8 @@ export interface AdminEventListRow {
   createdAt: string;
   confirmedFridayKickoffAt: string | null;
   completeness: CompletenessResult;
+  /** Visible to WR Admin per PRD §6.2. */
+  participantCount: number;
 }
 
 /** Grouped `count(*)` keyed by event id, for the ids we care about. */
@@ -56,6 +59,18 @@ async function countsByEvent(
     .from(table)
     .where(inArray(table.eventId, eventIds))
     .groupBy(table.eventId);
+  return new Map(rows.map((r) => [r.eventId, Number(r.n)]));
+}
+
+async function participantCountsByEvent(
+  eventIds: string[],
+): Promise<Map<string, number>> {
+  if (eventIds.length === 0) return new Map();
+  const rows = await db
+    .select({ eventId: participants.eventId, n: count() })
+    .from(participants)
+    .where(inArray(participants.eventId, eventIds))
+    .groupBy(participants.eventId);
   return new Map(rows.map((r) => [r.eventId, Number(r.n)]));
 }
 
@@ -95,14 +110,21 @@ export async function listAdminEvents(
     .orderBy(desc(events.createdAt));
 
   const eventIds = rows.map((r) => r.id);
-  const [dateCounts, criteriaCounts, sponsorCounts, judgeCounts, fileCounts] =
-    await Promise.all([
-      countsByEvent(dateOptions, eventIds),
-      countsByEvent(criteria, eventIds),
-      countsByEvent(techSponsors, eventIds),
-      countsByEvent(judges, eventIds),
-      attachmentCountsByEvent(eventIds),
-    ]);
+  const [
+    dateCounts,
+    criteriaCounts,
+    sponsorCounts,
+    judgeCounts,
+    fileCounts,
+    participantCounts,
+  ] = await Promise.all([
+    countsByEvent(dateOptions, eventIds),
+    countsByEvent(criteria, eventIds),
+    countsByEvent(techSponsors, eventIds),
+    countsByEvent(judges, eventIds),
+    attachmentCountsByEvent(eventIds),
+    participantCountsByEvent(eventIds),
+  ]);
 
   const intakeRows = eventIds.length
     ? await db
@@ -129,6 +151,7 @@ export async function listAdminEvents(
       createdAt: row.createdAt.toISOString(),
       confirmedFridayKickoffAt:
         row.confirmedFridayKickoffAt?.toISOString() ?? null,
+      participantCount: participantCounts.get(row.id) ?? 0,
       completeness: evaluateCompleteness({
         dateOptionCount: dateCounts.get(row.id) ?? 0,
         supplementaryInfo: intake?.supplementaryInfo ?? null,

@@ -4,6 +4,7 @@ import {
   countAdminEventsByStatus,
   listAdminEvents,
 } from "@/lib/rogue-raise/events/queries";
+import { isPublicEvent } from "@/lib/rogue-raise/events/landing";
 import { eventStatusLabel } from "@/lib/rogue-raise/events/status";
 import { formatWeekendLabel } from "@/lib/rogue-raise/intake/schedule";
 import { cn } from "@/lib/utils";
@@ -185,6 +186,22 @@ export default async function AdminEventsPage({
                         </>
                       )}
                     </dd>
+
+                    {isPublicEvent(row.status) ? (
+                      <>
+                        <dt className="text-ink/60">Registered</dt>
+                        <dd className="text-ink/90">
+                          {row.participantCount} builder
+                          {row.participantCount === 1 ? "" : "s"} ·{" "}
+                          <Link
+                            href={`/events/${row.slug}`}
+                            className="underline underline-offset-4"
+                          >
+                            public page
+                          </Link>
+                        </dd>
+                      </>
+                    ) : null}
 
                     <dt className="text-ink/60">Created</dt>
                     <dd className="text-ink/90">
