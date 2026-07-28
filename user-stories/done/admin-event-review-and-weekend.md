@@ -3,8 +3,8 @@ metadata:
   created_at:   2026-07-27T21:20:00-07:00
   activated_at: 2026-07-27T21:20:00-07:00
   planned_at:   2026-07-27T21:25:00-07:00
-  finished_at:
-  updated_at:   2026-07-27T21:25:00-07:00
+  finished_at:  2026-07-27T21:28:00-07:00
+  updated_at:   2026-07-27T21:28:00-07:00
 -->
 
 # Story: Admin Event Review & Confirmed Weekend
@@ -67,3 +67,53 @@ Mirror the story-2/3 harness (dotenv first, real Postgres, mocked email + `next/
 
 - Re-confirming after `registration_open` changes dates participants have already seen; the UI warns but does not block. If that turns out to be wrong, the gate is one constant.
 - Resend revoking prior tokens means a sponsor mid-form on an old link is logged out on their next save; acceptable, and the message tells them to use the newest email.
+
+## Review
+
+**Date:** 2026-07-27 · **Commit reviewed:** eb6fd79 · Self-review against ACs + browser verification · **Status: all 10 ACs met**
+
+### Acceptance criteria
+
+| # | AC | Verdict |
+|---|----|---------|
+| 1 | `/admin/events` lists events with status, org, intake progress, filterable | ✅ browser; counts and filters verified live |
+| 2 | Detail shows the full intake read-only + downloadable files | ✅ every §5.2.2 section rendered; admin download route behind the env gate |
+| 3 | Each weekend shown with its expanded canonical schedule | ✅ browser: all four fixed moments per option |
+| 4 | Confirm exactly one weekend; writes `confirmed_friday_kickoff_at` | ✅ integration test asserts the confirmed-row count, plus the event column |
+| 5 | Re-confirming moves atomically; audit-logged from→to | ✅ test moves A→C and asserts one confirmed row and honest audit values |
+| 6 | Refused out of phase, and for an option from another event | ✅ two integration tests; neither event is mutated |
+| 7 | Resend mints fresh, revokes prior, re-sends | ✅ browser: the old link then reads "this link has been turned off"; test asserts one live token whose hash matches the raw token in the email |
+| 8 | One transaction, audit-logged, email after commit | ✅ including the email-failure path, which keeps the new link and audits the failure |
+| 9 | Intake-complete notification links to the event | ✅ |
+| 10 | Brand-themed, responsive, accessible; env gate intact | ✅ verified in browser; no automated coverage (standing caveat) |
+
+### Notable decisions confirmed in review
+
+- **Failing safe in the right direction.** If the reissue email fails to send, the old links are already dead. That is deliberate: an admin who sees the error knows to retry or phone, whereas the alternative (revoke only after a successful send) can leave two live links with no record of which the sponsor used.
+- **Already-expired tokens are left alone** rather than swept into the revoked set — a test pins this, so the "N earlier links stopped working" count stays truthful.
+- **Late confirmation is warned, not blocked.** Changing dates after registration opens is a legitimate staff act; the confirm panel says what it means instead of refusing.
+
+### Known gaps (deliberate)
+
+- No admin auth — actor is still the `wr-admin` placeholder, and `/admin/*` remains behind the env gate. Unchanged from story 2, flagged in HANDOFF.
+- A sponsor can still delete a weekend the admin has confirmed from their own intake form; the confirmed flag is preserved on re-save but not protected from removal. Called out below as the first carry-forward.
+- No automated a11y/visual coverage.
+
+## Learnings
+
+**What went well**
+
+- Reusing `evaluateCompleteness` for the admin view meant the console and the sponsor's own form describe intake progress in exactly the same words, for free. Pure functions over facts keep paying out.
+- Deriving panel open/closed from the action version — rather than closing it in an effect — was both what the lint rule demanded and strictly less code. The rule was right; the first instinct was wrong.
+- Storing only the Friday instant and deriving the rest continues to be the right call: the admin page, the emails, and the sponsor form all render the same weekend without any of them agreeing on a format.
+- Every action in this story is a small transaction with a lock and an audit row. Four stories in, that shape is now automatic and reviews faster each time.
+
+**What was surprising**
+
+- Revoke-then-send has no failure ordering that is safe in both directions; it only has one that is safe in the direction that matters. Writing that reasoning into the code comment took longer than the code.
+- `notInArray` on an enum column needed the literal tuple typed, a small friction that would bite anyone reaching for `notInArray(status, someStringArray)`.
+
+**Do differently next time**
+
+- Carry-forwards: **protect a confirmed weekend from sponsor deletion** (the intake save should refuse to remove a confirmed option, the way it refuses to remove a judge with a completed profile — the pattern already exists, it just wasn't applied here); a uniqueness migration on `events.sponsor_application_id`; and admin auth, which is now blocking two stories' worth of placeholder actors.
+- **M2 is complete.** Next up is M3 — the agent layer core (`AgentRun`/`GeneratedAsset` infra, durable workflow scaffold, AI Gateway wiring, and the approve/edit/reject review UI), which everything in §5.3 depends on.
