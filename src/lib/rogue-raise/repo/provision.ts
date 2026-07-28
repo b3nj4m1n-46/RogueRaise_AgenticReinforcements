@@ -78,7 +78,10 @@ export async function describeProvisioningBlockers(eventId: string): Promise<str
   return blockers;
 }
 
-export async function provisionContextRepo(eventId: string): Promise<ProvisionOutcome> {
+export async function provisionContextRepo(
+  eventId: string,
+  actor: string,
+): Promise<ProvisionOutcome> {
   const detail = await loadAdminEvent(eventId);
   if (!detail) return { ok: false, reason: "We couldn't find that event." };
   if (!canProvisionRepo(detail.status)) {
@@ -137,7 +140,7 @@ export async function provisionContextRepo(eventId: string): Promise<ProvisionOu
   if (secretBlockers) return { ok: false, reason: secretBlockers };
 
   const previousStatus = detail.status;
-  await setStatus(eventId, "repo_generating", previousStatus);
+  await setStatus(eventId, "repo_generating", previousStatus, actor);
 
   try {
     const github = getGithubAdapter();
@@ -200,7 +203,7 @@ export async function provisionContextRepo(eventId: string): Promise<ProvisionOu
       });
     }
 
-    await setStatus(eventId, "repo_review", "repo_generating", {
+    await setStatus(eventId, "repo_review", "repo_generating", actor, {
       repoUrl: repo.url,
       pullRequestUrl: pr.url,
       fileCount: Object.keys(files).length,
@@ -216,7 +219,7 @@ export async function provisionContextRepo(eventId: string): Promise<ProvisionOu
   } catch (err) {
     // Put the event back where it was — `repo_generating` with no repo is a
     // dead end nobody can act on.
-    await setStatus(eventId, previousStatus, "repo_generating", {
+    await setStatus(eventId, previousStatus, "repo_generating", actor, {
       failed: true,
     }).catch((restoreErr) =>
       console.error("[repo] failed to restore event status", restoreErr),
@@ -249,6 +252,7 @@ async function setStatus(
   eventId: string,
   next: string,
   from: string,
+  actor: string,
   metadata: Record<string, unknown> = {},
 ): Promise<void> {
   await db.transaction(async (tx) => {
@@ -258,7 +262,7 @@ async function setStatus(
       .where(and(eq(events.id, eventId)));
     await tx.insert(auditLog).values({
       eventId,
-      actor: "wr-admin",
+      actor,
       action: `event.${next}`,
       entity: "event",
       fromValue: from,

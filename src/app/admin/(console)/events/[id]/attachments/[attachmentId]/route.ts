@@ -13,6 +13,7 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { checkAdmin } from "@/lib/rogue-raise/admin/guard";
 import { db } from "@/lib/rogue-raise/db";
 import { attachments } from "@/lib/rogue-raise/db/schema";
 import { INTAKE_ATTACHMENT_KIND } from "@/lib/rogue-raise/intake/constants";
@@ -36,6 +37,13 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string; attachmentId: string }> },
 ) {
+  // Route handlers do NOT render layouts, so the console's layout guard
+  // never runs here. Without this check the only protection would be the
+  // middleware's cookie-presence test — and this serves a private file.
+  // A 404 rather than a 403: an unauthorized caller learns nothing about
+  // whether the file exists.
+  if (!(await checkAdmin()).ok) return notFound();
+
   const { id: eventId, attachmentId } = await context.params;
   if (
     !z.uuid().safeParse(eventId).success ||

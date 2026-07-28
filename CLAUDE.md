@@ -4,12 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current State
 
-This repo is **pre-code**: it contains only planning artifacts. There is no `package.json`, build system, or application code yet.
+**Milestones M0–M10 are implemented.** All four phases run end to end: sponsor
+application → curation → intake → context repo → judges + kickoff deck →
+marketing → registration → submissions → judging → awards → stakeholder handoff
+portal, with the admin console behind real Better Auth sign-in.
 
-- `PRD.md` — the implementation-ready Product Requirements Document (v1.0). This is the source of truth. It is written to be executed by coding agents in Auto mode and defines the data model, phases, agent specs, tech stack, and build order.
+- `PRD.md` — the Product Requirements Document (v1.0). Still the source of truth for intent; where the build diverged, the divergence is argued in the relevant story file rather than silently.
+- `user-stories/done/*.md` — one file per milestone: acceptance criteria, what was built, what browser verification found, and the learnings. **Read the story before changing an area** — it usually explains why something looks the way it does.
+- `HANDOFF.md` — the merge contract for WR tech staff: portability seams, env vars, the two Drizzle configs, and the checklist.
 - `whiteboard-july-6.md` — earlier planning notes; superseded in detail by the PRD but useful for original intent.
 
-When building, **follow the PRD's build order (§14)**: milestone **M0 (Foundation)** gates everything else. Do not start phase features before M0 is complete.
+Known gaps are listed in HANDOFF.md, not hidden: agent runs are not yet durable
+(no Vercel Workflows), the AI Gateway / GitHub App / Resend / Blob providers have
+never run against real credentials, there is no stakeholder-facing *review*
+surface, and research documents have no citation checking.
 
 ## What This Product Is
 
@@ -39,6 +47,8 @@ This is built as a **standalone Next.js app now, to be merged into WR's existing
 - **`"use server"` modules may export ONLY async functions** (Next 16 enforces this at build/runtime). Constants, initial-state objects, and helpers belong in a plain sibling module (see `src/lib/rogue-raise/sponsors/form-state.ts`, `admin-decision-state.ts`). Type-only exports are fine.
 - **Controlled inputs desync from React's post-action `form.reset()`.** React resets the form once a server action settles; because the rendered value is unchanged, the reconciler writes nothing back and the DOM keeps the reset. Key the `<form>` on the action result's version (see `src/app/judge/score/[eventId]/scorecard.tsx`) and layer local edits over the server's saved value rather than seeding state from it once.
 - **A multi-line JSX text node that begins right after `{expr}` loses its leading space** at compile time, and Prettier strips the `{" "}` fix. Use a template literal — `` {`… ${value} …`} `` — for prose that interpolates.
+- **Every privileged server action calls `adminOrError()` or `requireAdmin()` itself** (`src/lib/rogue-raise/admin/guard.ts`). Neither middleware nor the `(console)` layout is a boundary: middleware runs on the Edge and only checks that a session cookie exists, and layouts don't render for Server Actions or Route Handlers. `src/lib/rogue-raise/admin/coverage.test.ts` fails if a new action skips the guard — add it to that file's allow-list, with a reason, only if it is genuinely public or magic-link gated.
+- **Never disable a control the user is currently operating.** A `<fieldset disabled>` around radios blurs focus to `<body>` mid-interaction, and radios commit on arrow keys — so the user both loses their place and writes a value they didn't choose. Guard inside the handler (`if (pending) return`) and use `aria-busy` instead.
 
 ## Data Model (PRD §4, Appendix A)
 

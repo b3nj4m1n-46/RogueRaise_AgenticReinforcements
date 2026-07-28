@@ -9,6 +9,7 @@
  * never a dead end.
  */
 import { useActionState, useId, useState } from "react";
+import { useActionFocus } from "@/lib/use-action-focus";
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,9 @@ export function Scorecard({
   const fieldError = (id: string) => (mine ? state.fieldErrors?.[id] : undefined);
   const scoredCount = criteria.filter((c) => scores[c.id] !== undefined).length;
 
+  // Only this card's own results move focus — two cards share the page.
+  const resultRef = useActionFocus<HTMLDivElement>(mine ? state.version : undefined);
+
   const status = submission.card
     ? submission.card.isDraft
       ? "Draft saved"
@@ -113,7 +117,7 @@ export function Scorecard({
             id={`${baseId}-title`}
             className="font-serif text-2xl font-semibold text-ink"
           >
-            <span className="font-mono text-sm text-ink/50">{index + 1}. </span>
+            <span className="font-mono text-sm text-ink/70">{index + 1}. </span>
             {submission.teamName}
           </h2>
           <span
@@ -158,6 +162,36 @@ export function Scorecard({
       </header>
 
       {/*
+        * The result region lives OUTSIDE the keyed form below, so it survives
+        * the remount — a live region that is torn down and re-mounted already
+        * populated is announced unreliably by NVDA and JAWS. Focus moves here
+        * after each result, which both announces the message and stops focus
+        * falling to the top of a page holding one scorecard per project.
+        */}
+      <div
+        ref={resultRef}
+        tabIndex={-1}
+        className="outline-none"
+        aria-live="polite"
+      >
+        {mine && state.formError ? (
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive bg-destructive/5 p-3 text-sm text-ink"
+          >
+            {state.formError}
+          </p>
+        ) : null}
+        {mine && state.ok ? (
+          <p className="rounded-lg border border-wr-olive-green bg-wr-olive-green/10 p-3 text-sm text-ink">
+            {state.saved === "final"
+              ? "Score recorded. You can change it while scoring is open."
+              : "Draft saved. Come back to it whenever."}
+          </p>
+        ) : null}
+      </div>
+
+      {/*
         * Keyed on the action version. React calls `form.reset()` once a server
         * action settles, which unchecks the radios in the DOM; because the
         * rendered `checked` values are unchanged, React's reconciler sees no
@@ -175,26 +209,7 @@ export function Scorecard({
         <input type="hidden" name="submission_id" value={submission.id} />
         <input type="hidden" name="version" value={state.version ?? 0} />
 
-        {mine && state.formError ? (
-          <p
-            role="alert"
-            className="rounded-lg border border-destructive bg-destructive/5 p-3 text-sm text-ink"
-          >
-            {state.formError}
-          </p>
-        ) : null}
-        {mine && state.ok ? (
-          <p
-            role="status"
-            className="rounded-lg border border-wr-olive-green bg-wr-olive-green/10 p-3 text-sm text-ink"
-          >
-            {state.saved === "final"
-              ? "Score recorded. You can change it while scoring is open."
-              : "Draft saved. Come back to it whenever."}
-          </p>
-        ) : null}
-
-        <p className="font-mono text-xs uppercase tracking-widest text-ink/50">
+        <p className="font-mono text-xs uppercase tracking-widest text-ink/70">
           {SCALE_HINT}
         </p>
 
@@ -202,11 +217,20 @@ export function Scorecard({
           const groupId = `${baseId}-${criterion.id}`;
           const error = fieldError(criterion.id);
           return (
-            <fieldset key={criterion.id} className="border-0 p-0">
+            <fieldset
+              key={criterion.id}
+              className="border-0 p-0"
+              // On the fieldset (role `group`), not the plain div it used to
+              // sit on — a roleless element is not exposed to assistive tech,
+              // so the error description was dropped entirely. `aria-invalid`
+              // is NOT valid on role="radio", so the group's description is
+              // the mechanism here.
+              aria-describedby={error ? `${groupId}-error` : undefined}
+            >
               <legend className="mb-2 font-medium text-ink">
                 {criterion.label}
                 {criterion.weight ? (
-                  <span className="ml-2 font-mono text-xs text-ink/50">
+                  <span className="ml-2 font-mono text-xs text-ink/70">
                     ×{criterion.weight}
                   </span>
                 ) : null}
@@ -216,10 +240,7 @@ export function Scorecard({
                 * adding role="radiogroup" here would make a screen reader
                 * announce the criterion twice.
                 */}
-              <div
-                aria-describedby={error ? `${groupId}-error` : undefined}
-                className="flex flex-wrap gap-2"
-              >
+              <div className="flex flex-wrap gap-2">
                 {SCALE.map((value) => {
                   const id = `${groupId}-${value}`;
                   const checked = scores[criterion.id] === value;
@@ -234,7 +255,9 @@ export function Scorecard({
                         "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink",
                         checked
                           ? "border-ink bg-ink font-semibold text-background"
-                          : "border-wr-olive-green/40 text-ink hover:bg-muted",
+                          // Full strength: with the input sr-only, this border
+                          // is the control's entire visible boundary (1.4.11).
+                          : "border-wr-olive-green text-ink hover:bg-muted",
                       )}
                     >
                       <input
@@ -290,7 +313,7 @@ export function Scorecard({
           ) : null}
         </div>
 
-        <p className="font-mono text-xs text-ink/50">
+        <p className="font-mono text-xs text-ink/70">
           {scoredCount} of {criteria.length} criteria scored
         </p>
 

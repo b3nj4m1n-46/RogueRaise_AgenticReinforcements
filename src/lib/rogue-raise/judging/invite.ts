@@ -17,6 +17,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { auditLog, events, judges, magicLinkTokens, submissions } from "../db/schema";
 import { getEmailAdapter } from "../integrations/email";
+import { createPacer } from "../integrations/rate-limit";
 import { generateMagicToken } from "../sponsors/magic-link";
 import { JUDGE_ROLE } from "../judges/access";
 import { JUDGE_LINK_TTL_MS } from "../judges/send";
@@ -37,6 +38,7 @@ export type ScoringInviteOutcome =
 
 export async function sendScoringLinks(
   eventId: string,
+  actor: string,
   options: { resend?: boolean } = {},
 ): Promise<ScoringInviteOutcome> {
   const [event] = await db
@@ -90,6 +92,10 @@ export async function sendScoringLinks(
   let skipped = 0;
   let failed = 0;
 
+  // Paced so a large blast doesn't trip the provider's per-second limit
+  // and lose the tail of the list to 429s. See integrations/rate-limit.ts.
+  const pacer = createPacer();
+
   for (const judge of judgeRows) {
     if (!options.resend && alreadySent.has(judge.id)) {
       skipped += 1;
@@ -108,7 +114,7 @@ export async function sendScoringLinks(
       });
       await tx.insert(auditLog).values({
         eventId,
-        actor: "wr-admin",
+        actor,
         action: "judge_scoring.sent",
         entity: "judge",
         toValue: "sent",
@@ -117,6 +123,7 @@ export async function sendScoringLinks(
       });
     });
 
+    await pacer.wait();
     const [result] = await Promise.allSettled([
       getEmailAdapter().send(
         buildScoringInviteEmail({

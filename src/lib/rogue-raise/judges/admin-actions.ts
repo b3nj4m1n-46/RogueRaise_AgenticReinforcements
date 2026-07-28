@@ -10,11 +10,17 @@ import { z } from "zod";
 
 import type { AdminEventState } from "../events/state";
 import { sendJudgeInvitations } from "./send";
+import { adminActor, adminOrError } from "../admin/guard";
 
 export async function sendJudgeInvitationsAction(
   prevState: AdminEventState,
   formData: FormData,
 ): Promise<AdminEventState> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error, version: 1 };
+
   const raw = formData.get("event_id");
   const eventId = typeof raw === "string" ? raw : "";
   const version = (prevState.version ?? 0) + 1;
@@ -23,7 +29,7 @@ export async function sendJudgeInvitationsAction(
     return { ok: false, formError: "We couldn't find that event.", version };
   }
 
-  const outcome = await sendJudgeInvitations(eventId);
+  const outcome = await sendJudgeInvitations(eventId, adminActor(guard.admin));
   revalidatePath(`/admin/events/${eventId}/agents`);
 
   if (!outcome.ok) return { ok: false, formError: outcome.reason, version };

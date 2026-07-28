@@ -27,6 +27,7 @@ import { isJudgingOpen } from "./queries";
 import { computeFinalScore, isComplete, isValidScore, MAX_SCORE, MIN_SCORE } from "./scoring";
 import type { ScoreMap } from "./scoring";
 import type { ScorecardState } from "./form-state";
+import { adminActor, adminOrError } from "../admin/guard";
 
 const MAX_NOTES = 4000;
 
@@ -167,8 +168,13 @@ export async function saveScorecard(
 export async function sendScoringLinksAction(
   eventId: string,
 ): Promise<{ ok: boolean; error?: string; summary?: string }> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const { sendScoringLinks } = await import("./invite");
-  const outcome = await sendScoringLinks(eventId);
+  const outcome = await sendScoringLinks(eventId, adminActor(guard.admin));
   if (!outcome.ok) return { ok: false, error: outcome.reason };
   const parts = [`${outcome.sent} sent`];
   if (outcome.skipped) parts.push(`${outcome.skipped} already had one`);
@@ -181,6 +187,11 @@ export async function closeJudging(eventId: string): Promise<{
   ok: boolean;
   error?: string;
 }> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const result = await db.transaction(async (tx) => {
     const [event] = await tx
       .select({ id: events.id, status: events.status })
@@ -205,7 +216,7 @@ export async function closeJudging(eventId: string): Promise<{
   if (result.ok) {
     await db.insert(auditLog).values({
       eventId,
-      actor: "wr-admin",
+      actor: adminActor(guard.admin),
       action: "event.status_changed",
       entity: "event",
       fromValue: result.from,
@@ -222,6 +233,11 @@ export async function openJudging(eventId: string): Promise<{
   ok: boolean;
   error?: string;
 }> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const result = await db.transaction(async (tx) => {
     const [event] = await tx
       .select({ id: events.id, status: events.status })
@@ -258,7 +274,7 @@ export async function openJudging(eventId: string): Promise<{
   if (result.ok) {
     await db.insert(auditLog).values({
       eventId,
-      actor: "wr-admin",
+      actor: adminActor(guard.admin),
       action: "event.status_changed",
       entity: "event",
       fromValue: result.from,

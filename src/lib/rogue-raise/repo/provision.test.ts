@@ -162,7 +162,7 @@ describe("provisionContextRepo — the review gate holds", () => {
     expect(blockers).toHaveLength(4);
     expect(blockers[0]).toMatch(/needs approving/);
 
-    const outcome = await provisionContextRepo(eventId);
+    const outcome = await provisionContextRepo(eventId, "wr-admin");
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.reason).toMatch(/Research notes is pending/);
@@ -184,7 +184,7 @@ describe("provisionContextRepo — the review gate holds", () => {
 
   it("refuses outside the right phase", async () => {
     const eventId = await createEventWithDocuments({ status: "registration_open" });
-    const outcome = await provisionContextRepo(eventId);
+    const outcome = await provisionContextRepo(eventId, "wr-admin");
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.reason).toMatch(/this event is "registration_open"/);
@@ -195,7 +195,7 @@ describe("provisionContextRepo — happy path", () => {
   it("writes the whole PRD tree, records the repo, and moves the event", async () => {
     const eventId = await createEventWithDocuments();
 
-    const outcome = await provisionContextRepo(eventId);
+    const outcome = await provisionContextRepo(eventId, "wr-admin");
 
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
@@ -240,11 +240,11 @@ describe("provisionContextRepo — happy path", () => {
 
   it("updates the existing repo instead of creating a second one", async () => {
     const eventId = await createEventWithDocuments();
-    const first = await provisionContextRepo(eventId);
+    const first = await provisionContextRepo(eventId, "wr-admin");
     expect(first.ok).toBe(true);
     if (!first.ok) return;
 
-    const second = await provisionContextRepo(eventId);
+    const second = await provisionContextRepo(eventId, "wr-admin");
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.updated).toBe(true);
@@ -266,7 +266,7 @@ describe("provisionContextRepo — secrets", () => {
       .set({ body: "Clone with ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8 first." })
       .where(eq(generatedAssets.eventId, eventId));
 
-    const outcome = await provisionContextRepo(eventId);
+    const outcome = await provisionContextRepo(eventId, "wr-admin");
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;

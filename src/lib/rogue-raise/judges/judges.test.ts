@@ -179,7 +179,7 @@ describe("splitJudgeLetters", () => {
 describe("sendJudgeInvitations", () => {
   it("refuses to send a draft that hasn't been approved", async () => {
     const fixture = await createFixture({ reviewStatus: "pending" });
-    const outcome = await sendJudgeInvitations(fixture.eventId);
+    const outcome = await sendJudgeInvitations(fixture.eventId, "wr-admin");
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -189,7 +189,7 @@ describe("sendJudgeInvitations", () => {
 
   it("refuses a draft with no per-judge markers", async () => {
     const fixture = await createFixture({ body: "Dear judges, please judge." });
-    const outcome = await sendJudgeInvitations(fixture.eventId);
+    const outcome = await sendJudgeInvitations(fixture.eventId, "wr-admin");
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -199,7 +199,7 @@ describe("sendJudgeInvitations", () => {
 
   it("emails each judge their own letter and their own link", async () => {
     const fixture = await createFixture();
-    const outcome = await sendJudgeInvitations(fixture.eventId);
+    const outcome = await sendJudgeInvitations(fixture.eventId, "wr-admin");
 
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
@@ -238,10 +238,10 @@ describe("sendJudgeInvitations", () => {
 
   it("skips a judge who already has a live link rather than emailing twice", async () => {
     const fixture = await createFixture();
-    await sendJudgeInvitations(fixture.eventId);
+    await sendJudgeInvitations(fixture.eventId, "wr-admin");
     sendMock.mockClear();
 
-    const second = await sendJudgeInvitations(fixture.eventId);
+    const second = await sendJudgeInvitations(fixture.eventId, "wr-admin");
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.sent).toBe(0);
@@ -254,7 +254,7 @@ describe("sendJudgeInvitations", () => {
     const fixture = await createFixture({
       body: "## JUDGE: nobody@example.org\n\nDear stranger.",
     });
-    const outcome = await sendJudgeInvitations(fixture.eventId);
+    const outcome = await sendJudgeInvitations(fixture.eventId, "wr-admin");
 
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
@@ -267,7 +267,7 @@ describe("sendJudgeInvitations", () => {
 describe("judge background form", () => {
   async function sentFixture() {
     const fixture = await createFixture();
-    await sendJudgeInvitations(fixture.eventId);
+    await sendJudgeInvitations(fixture.eventId, "wr-admin");
     return { fixture, token: tokenFromLastEmail() };
   }
 

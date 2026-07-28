@@ -17,7 +17,8 @@
  *     old inbox stops working the moment a new one goes out.
  *
  * AUTH: `/admin/*` is env-gated dev-open (src/middleware.ts). There is no
- * per-admin identity yet, so audit rows record the `ACTOR_WR_ADMIN` placeholder.
+ * Audit rows record the individual admin (`adminActor(guard.admin)`), so "who
+ * confirmed this weekend" is answerable.
  * See HANDOFF.md — this must not deploy publicly before the auth story.
  */
 import { and, eq, gt, isNull } from "drizzle-orm";
@@ -42,8 +43,9 @@ import {
   SPONSOR_POC_ROLE,
 } from "../sponsors/magic-link";
 import { formatWeekendLabel } from "../intake/schedule";
-import { ACTOR_WR_ADMIN, type AdminEventState } from "./state";
+import { type AdminEventState } from "./state";
 import { canConfirmWeekend, canReissueIntakeInvite } from "./status";
+import { adminActor, adminOrError } from "../admin/guard";
 
 // --- Helpers ---------------------------------------------------------------
 
@@ -96,6 +98,11 @@ export async function confirmEventWeekend(
   prevState: AdminEventState,
   formData: FormData,
 ): Promise<AdminEventState> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error, version: 1 };
+
   const eventId = str(formData, "event_id");
   const optionId = str(formData, "date_option_id");
   if (!z.uuid().safeParse(eventId).success || !z.uuid().safeParse(optionId).success) {
@@ -140,7 +147,7 @@ export async function confirmEventWeekend(
 
       await tx.insert(auditLog).values({
         eventId,
-        actor: ACTOR_WR_ADMIN,
+        actor: adminActor(guard.admin),
         action: "event.weekend_confirmed",
         entity: "event",
         fromValue: event.confirmedFridayKickoffAt?.toISOString() ?? null,
@@ -193,6 +200,11 @@ export async function resendIntakeInvite(
   prevState: AdminEventState,
   formData: FormData,
 ): Promise<AdminEventState> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error, version: 1 };
+
   const eventId = str(formData, "event_id");
   if (!z.uuid().safeParse(eventId).success) {
     return fail(prevState, "We couldn't find that event.");
@@ -246,7 +258,7 @@ export async function resendIntakeInvite(
 
       await tx.insert(auditLog).values({
         eventId,
-        actor: ACTOR_WR_ADMIN,
+        actor: adminActor(guard.admin),
         action: "magic_link.reissued",
         entity: "magic_link_token",
         fromValue: String(revoked.length),

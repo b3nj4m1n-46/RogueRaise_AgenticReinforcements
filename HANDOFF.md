@@ -4,22 +4,57 @@ This app was built standalone (own local Postgres, own Next.js app) so the full
 flow works on a laptop with no WR credentials, then hands cleanly to WR tech
 staff to merge into the main site (PRD §3.1). This guide is the merge contract.
 
-## ⚠️ Admin console is dev-open — DO NOT deploy publicly yet
+## Admin console authentication
 
-`/admin/*` (the WR staff console, including the sponsor curation queue's
-**approve/reject** actions) has **no authentication yet** — Better Auth's `admin`
-plugin is a separate, not-yet-built story. These are privileged, externally
-visible, state-mutating actions (they transition events, mint magic-link tokens,
-and send email).
+`/admin/*` is behind **Better Auth** with the `admin` plugin (PRD §12). Three
+layers, because only the last one is a real boundary:
 
-Until the auth story lands:
+| Layer | What it does | Why it isn't enough on its own |
+|---|---|---|
+| `src/middleware.ts` | Redirects to `/admin/sign-in` when no session cookie is present | Edge runtime, no DB — it checks cookie PRESENCE, not validity. A forged cookie passes it |
+| `app/admin/(console)/layout.tsx` | Server-side `checkAdmin()` for every page in the group | Layouts do not render for Server Actions or Route Handlers |
+| `requireAdmin()` / `adminOrError()` in each action | The actual boundary | — |
 
-- `src/middleware.ts` hard-refuses every `/admin/*` request with **403** unless
-  `RR_ADMIN_DEV_OPEN === "true"`. That flag is set **only in local `.env`** and is
-  documented `false` in `.env.example`. **Never set it `true` in a deployed
-  environment.** Remove the flag + this gate once real admin auth exists.
-- Audit rows for admin decisions record `actor: "wr-admin"` as a **placeholder**;
-  swap it for the real authenticated admin identity when auth lands.
+`src/lib/rogue-raise/admin/coverage.test.ts` reads the source of every
+`"use server"` module and fails if a privileged action doesn't call the guard.
+Its allow-list is the written-down set of actions that are deliberately public or
+magic-link gated, each with a reason. **A new admin action with no guard fails
+that test** — that is how this property survives future work.
+
+Everything fails closed: no session, no role, a banned account, an unconfigured
+environment, or a thrown error all resolve to "not an admin"
+(`admin/guard.ts`, proven in `admin/guard.test.ts`).
+
+### First-run setup
+
+```bash
+npm run db:auth-migrate                  # Better Auth tables, in `public`
+npm run admin:create -- you@wr.com "You" # prints a generated password once
+```
+
+Sign-up is **disabled in the app** (`disableSignUp: true`) — an open sign-up form
+on a console that can email every participant is not a thing to ship. Accounts
+come from `admin:create`, which also promotes an existing account to admin when
+re-run. At merge, WR's own staff accounts already exist; grant them the `admin`
+role rather than creating new ones.
+
+### `RR_ADMIN_DEV_OPEN`
+
+Still exists, but it is now local-only convenience rather than the security
+model: `isDevOpen()` returns false whenever `NODE_ENV === "production"`, so
+setting it in a deployed environment does nothing. Audit rows written while it is
+on are attributed to `"wr-admin"` rather than to a person.
+
+### External roles do NOT use Better Auth sessions
+
+PRD §12 lists the `magicLink` plugin for Sponsor POC, Judge, Participant, and
+Stakeholder. This app uses **its own** magic-link implementation for those
+(`rogue_raise.magic_link_tokens` + `access/redeem.ts`), and that is deliberate:
+ours scopes a token to one **event** *and* one **role** and audits it, which is
+the property §12's own scoping AC turns on ("a Judge for Event A cannot read
+Event B"). Better Auth's plugin authenticates a person; it does not scope them to
+an event. Migrating would mean layering our event scoping back on top of it —
+possible, but it must not be done by simply swapping in the plugin.
 
 ### Magic-link tokens (sponsor intake)
 
@@ -185,10 +220,22 @@ GitHub App.
 
 ## Schema & migrations
 
-- Schema: `src/lib/rogue-raise/db/schema.ts` (Drizzle, `rogue_raise` pgSchema).
-- Config: `drizzle.config.ts` (`schemaFilter: ['rogue_raise']`, out `./drizzle`).
-- Migrations live in `./drizzle`. Drizzle owns these migrations end to end.
-- At merge, confirm which Neon database/branch the `rogue_raise` schema lands in.
+Two Drizzle configs, deliberately separate:
+
+| | Rogue Raise | Better Auth |
+|---|---|---|
+| Schema | `db/schema.ts` | `db/auth-schema.ts` |
+| Postgres schema | `rogue_raise` | `public` |
+| Config | `drizzle.config.ts` | `drizzle.auth.config.ts` |
+| Migrations | `./drizzle` | `./drizzle/auth` |
+| Commands | `db:generate`, `db:migrate` | `db:auth-generate`, `db:auth-migrate` |
+
+They never share a migration folder, which is what makes the merge mechanical:
+WR already has the auth tables, so `db/auth-schema.ts`, `drizzle.auth.config.ts`,
+and `drizzle/auth/` are all **deleted** at merge, leaving the `rogue_raise`
+migrations untouched.
+
+At merge, confirm which Neon database/branch the `rogue_raise` schema lands in.
 
 ## Local dev
 
@@ -197,8 +244,12 @@ npm run db:up        # start local postgres:16 (docker compose)
 npm install
 npm run db:generate  # generate SQL migrations from the schema
 npm run db:migrate   # apply migrations to local Postgres
+npm run db:auth-migrate                     # Better Auth tables (public schema)
+npm run admin:create -- you@wr.com "You"    # a staff account to sign in with
 npm run dev          # http://localhost:3000  ->  /rogue-raise
 ```
+
+Set `RR_ADMIN_DEV_OPEN="true"` in `.env` to skip sign-in locally.
 
 `npm run db:studio` opens Drizzle Studio; `npm run db:down` stops the DB.
 
@@ -207,7 +258,13 @@ npm run dev          # http://localhost:3000  ->  /rogue-raise
 - [ ] Lift `src/app/rogue-raise/*`, `src/app/admin/*`, `src/lib/rogue-raise/*`
       into the WR app (single cohesive segment).
 - [ ] Point `DATABASE_URL` at the agreed Neon database/branch; run migrations.
-- [ ] Repoint the `auth` adapter at WR's Better Auth instance.
+- [ ] Repoint `integrations/auth.ts` at WR's existing Better Auth instance and
+      DELETE `db/auth-schema.ts`, `drizzle.auth.config.ts`, `drizzle/auth/`, and
+      `app/api/auth/[...all]/route.ts` — WR already has all four.
+- [ ] Grant the `admin` role to WR staff accounts that already exist, rather
+      than running `admin:create`.
+- [ ] Confirm `RR_ADMIN_DEV_OPEN` is unset in every deployed environment (it is
+      ignored in production, but leaving it set is misleading).
 - [ ] Fill real credentials for AI Gateway, Resend, Vercel Blob, GitHub App.
 - [ ] **Smoke-test the AI Gateway provider** with a real key — it has only ever
       run against the dev provider.
@@ -218,6 +275,10 @@ npm run dev          # http://localhost:3000  ->  /rogue-raise
       production, by design.
 - [ ] Decide on malware scanning for sponsor uploads, or accept the documented
       validate-only posture in writing.
+- [ ] Decide whether bulk email keeps the inline pacer
+      (`integrations/rate-limit.ts`, ~600ms between sends) or moves to Vercel
+      Queues. The pacer holds the request open for the whole send, which is fine
+      at tens of recipients and wrong at thousands.
 - [ ] Replace the URL-borne intake token with a Better Auth `magicLink` session.
 - [ ] Confirm the WR GitHub org name + install the GitHub App with repo-create/
       push permissions, then **smoke-test provisioning** — the App provider has

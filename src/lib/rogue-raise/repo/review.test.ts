@@ -99,7 +99,7 @@ async function createProvisionedEvent(): Promise<string> {
     })),
   );
 
-  const outcome = await provisionContextRepo(event.id);
+  const outcome = await provisionContextRepo(event.id, "wr-admin");
   if (!outcome.ok) throw new Error(`fixture failed to provision: ${outcome.reason}`);
   return event.id;
 }
@@ -191,7 +191,7 @@ describe("approveRepo", () => {
     const eventId = await createProvisionedEvent();
     expect(await eventStatus(eventId)).toBe("repo_review");
 
-    const outcome = await approveRepo(eventId);
+    const outcome = await approveRepo(eventId, "wr-admin");
 
     expect(outcome.ok).toBe(true);
     expect(await eventStatus(eventId)).toBe("repo_approved");
@@ -213,9 +213,9 @@ describe("approveRepo", () => {
 
   it("refuses from the wrong phase rather than publishing twice", async () => {
     const eventId = await createProvisionedEvent();
-    await approveRepo(eventId);
+    await approveRepo(eventId, "wr-admin");
 
-    const second = await approveRepo(eventId);
+    const second = await approveRepo(eventId, "wr-admin");
     expect(second.ok).toBe(false);
     if (second.ok) return;
     expect(second.reason).toMatch(/repo_approved/);

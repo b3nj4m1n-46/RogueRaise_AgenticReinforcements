@@ -15,9 +15,3 @@ export interface AdminEventState {
 
 export const initialAdminEventState: AdminEventState = { ok: true };
 
-/**
- * Audit actor for console actions. Still a placeholder: `/admin/*` has no
- * per-person identity until the Better Auth `admin` story lands, and the same
- * constant is used by the sponsor curation actions.
- */
-export const ACTOR_WR_ADMIN = "wr-admin";

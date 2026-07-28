@@ -413,24 +413,24 @@ describe("submitProject", () => {
 describe("sendSubmissionInvites", () => {
   it("emails every registered builder once and skips them on a second press", async () => {
     const fixture = await createFixture();
-    const first = await sendSubmissionInvites(fixture.eventId);
+    const first = await sendSubmissionInvites(fixture.eventId, "wr-admin");
     // The fixture already minted a participant token each, so those are skipped.
     expect(first).toMatchObject({ ok: true, skipped: 3, sent: 0 });
 
     await db
       .delete(magicLinkTokens)
       .where(eq(magicLinkTokens.eventId, fixture.eventId));
-    const second = await sendSubmissionInvites(fixture.eventId);
+    const second = await sendSubmissionInvites(fixture.eventId, "wr-admin");
     expect(second).toMatchObject({ ok: true, sent: 3 });
     expect(sendMock).toHaveBeenCalledTimes(3);
 
-    const third = await sendSubmissionInvites(fixture.eventId);
+    const third = await sendSubmissionInvites(fixture.eventId, "wr-admin");
     expect(third).toMatchObject({ ok: true, sent: 0, skipped: 3 });
   });
 
   it("refuses when the event isn't live", async () => {
     const fixture = await createFixture({ status: "judging" });
-    expect(await sendSubmissionInvites(fixture.eventId)).toMatchObject({
+    expect(await sendSubmissionInvites(fixture.eventId, "wr-admin")).toMatchObject({
       ok: false,
     });
     expect(sendMock).not.toHaveBeenCalled();
@@ -739,24 +739,24 @@ describe("sendScoringLinks", () => {
     await submit(submissionForm(fixture, 0));
     await openJudging(fixture.eventId);
 
-    expect(await sendScoringLinks(fixture.eventId)).toMatchObject({
+    expect(await sendScoringLinks(fixture.eventId, "wr-admin")).toMatchObject({
       ok: true,
       sent: 2,
     });
-    expect(await sendScoringLinks(fixture.eventId)).toMatchObject({
+    expect(await sendScoringLinks(fixture.eventId, "wr-admin")).toMatchObject({
       ok: true,
       sent: 0,
       skipped: 2,
     });
     // An explicit resend is still possible.
     expect(
-      await sendScoringLinks(fixture.eventId, { resend: true }),
+      await sendScoringLinks(fixture.eventId, "wr-admin", { resend: true }),
     ).toMatchObject({ ok: true, sent: 2 });
   });
 
   it("refuses before judging is open", async () => {
     const fixture = await createFixture();
-    expect(await sendScoringLinks(fixture.eventId)).toMatchObject({ ok: false });
+    expect(await sendScoringLinks(fixture.eventId, "wr-admin")).toMatchObject({ ok: false });
     expect(sendMock).not.toHaveBeenCalled();
   });
 });

@@ -18,6 +18,7 @@ import { db } from "../db";
 import { auditLog, generatedAssets, judges, magicLinkTokens } from "../db/schema";
 import { loadAdminEvent } from "../events/queries";
 import { getEmailAdapter } from "../integrations/email";
+import { createPacer } from "../integrations/rate-limit";
 import { generateMagicToken } from "../sponsors/magic-link";
 import { JUDGE_ROLE } from "./access";
 import { buildJudgeInvitationEmail } from "./emails";
@@ -41,7 +42,10 @@ export type SendOutcome =
   | { ok: true; sent: number; skipped: number; unmatched: string[] }
   | { ok: false; reason: string };
 
-export async function sendJudgeInvitations(eventId: string): Promise<SendOutcome> {
+export async function sendJudgeInvitations(
+  eventId: string,
+  actor: string,
+): Promise<SendOutcome> {
   const detail = await loadAdminEvent(eventId);
   if (!detail) return { ok: false, reason: "We couldn't find that event." };
 
@@ -84,6 +88,10 @@ export async function sendJudgeInvitations(eventId: string): Promise<SendOutcome
   let skipped = 0;
   const unmatched: string[] = [];
 
+  // Paced so a large blast doesn't trip the provider's per-second limit
+  // and lose the tail of the list to 429s. See integrations/rate-limit.ts.
+  const pacer = createPacer();
+
   for (const letter of letters) {
     const judge = byEmail.get(letter.email.toLowerCase());
     if (!judge) {
@@ -111,7 +119,8 @@ export async function sendJudgeInvitations(eventId: string): Promise<SendOutcome
       continue;
     }
 
-    await sendOne(eventId, judge, letter, detail, now);
+    await pacer.wait();
+    await sendOne(eventId, judge, letter, detail, now, actor);
     sent += 1;
   }
 
@@ -127,6 +136,7 @@ async function sendOne(
   letter: JudgeLetter,
   detail: EventDetail,
   now: Date,
+  actor: string,
 ): Promise<void> {
   // Mint first, inside a transaction with the audit row, so a token always has
   // a record of why it exists.
@@ -142,7 +152,7 @@ async function sendOne(
     });
     await tx.insert(auditLog).values({
       eventId,
-      actor: "wr-admin",
+      actor,
       action: "judge_email.sent",
       entity: "judge",
       toValue: "sent",

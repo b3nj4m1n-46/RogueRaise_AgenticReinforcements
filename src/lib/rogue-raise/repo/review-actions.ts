@@ -14,6 +14,7 @@ import { z } from "zod";
 
 import type { AdminEventState } from "../events/state";
 import { addComment, approveRepo, requestRepoChanges } from "./review";
+import { adminActor, adminOrError } from "../admin/guard";
 
 function str(formData: FormData, key: string): string {
   const v = formData.get(key);
@@ -30,6 +31,11 @@ export async function commentOnRepoFileAction(
   prevState: AdminEventState,
   formData: FormData,
 ): Promise<AdminEventState> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error, version: 1 };
+
   const eventId = str(formData, "event_id");
   const filePath = str(formData, "file_path");
   const parsed = bodySchema.safeParse(str(formData, "body"));
@@ -59,12 +65,17 @@ export async function approveRepoAction(
   prevState: AdminEventState,
   formData: FormData,
 ): Promise<AdminEventState> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error, version: 1 };
+
   const eventId = str(formData, "event_id");
   if (!z.uuid().safeParse(eventId).success) {
     return { ok: false, formError: "We couldn't find that event.", version: bump(prevState) };
   }
 
-  const outcome = await approveRepo(eventId);
+  const outcome = await approveRepo(eventId, adminActor(guard.admin));
   revalidatePath(`/admin/events/${eventId}/repo-review`);
   revalidatePath(`/admin/events/${eventId}`);
 
@@ -77,6 +88,11 @@ export async function requestRepoChangesAction(
   prevState: AdminEventState,
   formData: FormData,
 ): Promise<AdminEventState> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error, version: 1 };
+
   const eventId = str(formData, "event_id");
   const parsed = bodySchema.safeParse(str(formData, "body"));
 

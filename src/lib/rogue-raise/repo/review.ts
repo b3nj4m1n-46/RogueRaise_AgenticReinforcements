@@ -206,7 +206,10 @@ export type RepoDecisionOutcome =
  * Publishing is the last irreversible step before participants can see it, so
  * it happens only here and only from `repo_review`.
  */
-export async function approveRepo(eventId: string): Promise<RepoDecisionOutcome> {
+export async function approveRepo(
+  eventId: string,
+  actor: string,
+): Promise<RepoDecisionOutcome> {
   const detail = await loadAdminEvent(eventId);
   if (!detail) return { ok: false, reason: "We couldn't find that event." };
   if (detail.status !== "repo_review") {
@@ -248,7 +251,7 @@ export async function approveRepo(eventId: string): Promise<RepoDecisionOutcome>
       .where(eq(events.id, eventId));
     await tx.insert(auditLog).values({
       eventId,
-      actor: "wr-admin",
+      actor,
       action: "event.repo_approved",
       entity: "event",
       fromValue: "repo_review",

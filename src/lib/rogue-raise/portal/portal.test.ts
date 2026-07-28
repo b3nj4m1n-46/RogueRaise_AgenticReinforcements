@@ -5,7 +5,7 @@
  */
 import "dotenv/config";
 
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { sendMock, statsMock, generateMock } = vi.hoisted(() => ({
@@ -261,7 +261,7 @@ describe("isPortalOpen", () => {
 describe("openPortal", () => {
   it("grants access, mints a link, and emails each stakeholder once", async () => {
     const fixture = await createFixture();
-    expect(await openPortal(fixture.eventId)).toMatchObject({ ok: true, sent: 2 });
+    expect(await openPortal(fixture.eventId, "wr-admin")).toMatchObject({ ok: true, sent: 2 });
     expect(sendMock).toHaveBeenCalledTimes(2);
 
     const rows = await db
@@ -271,12 +271,12 @@ describe("openPortal", () => {
     expect(rows.every((s) => s.canAccessPortal)).toBe(true);
 
     // Idempotent: already-granted stakeholders are skipped.
-    expect(await openPortal(fixture.eventId)).toMatchObject({
+    expect(await openPortal(fixture.eventId, "wr-admin")).toMatchObject({
       ok: true,
       sent: 0,
       skipped: 2,
     });
-    expect(await openPortal(fixture.eventId, { resend: true })).toMatchObject({
+    expect(await openPortal(fixture.eventId, "wr-admin", { resend: true })).toMatchObject({
       ok: true,
       sent: 2,
     });
@@ -284,7 +284,7 @@ describe("openPortal", () => {
 
   it("refuses before the event is completed, so scores can't be read mid-judging", async () => {
     const fixture = await createFixture({ status: "judging" });
-    const outcome = await openPortal(fixture.eventId);
+    const outcome = await openPortal(fixture.eventId, "wr-admin");
     expect(outcome).toMatchObject({ ok: false });
     expect(sendMock).not.toHaveBeenCalled();
 
@@ -297,7 +297,7 @@ describe("openPortal", () => {
 
   it("never emits a raw token into the audit log", async () => {
     const fixture = await createFixture();
-    await openPortal(fixture.eventId);
+    await openPortal(fixture.eventId, "wr-admin");
     const rows = await db
       .select()
       .from(auditLog)
@@ -320,7 +320,7 @@ describe("redeemStakeholderToken", () => {
     });
     expect(before).toMatchObject({ ok: false, reason: "not_open" });
 
-    await openPortal(fixture.eventId);
+    await openPortal(fixture.eventId, "wr-admin");
     const after = await redeemStakeholderToken({
       rawToken: raw,
       eventId: fixture.eventId,
@@ -330,7 +330,7 @@ describe("redeemStakeholderToken", () => {
 
   it("refuses a token from another event", async () => {
     const [a, b] = await Promise.all([createFixture(), createFixture()]);
-    await Promise.all([openPortal(a.eventId), openPortal(b.eventId)]);
+    await Promise.all([openPortal(a.eventId, "wr-admin"), openPortal(b.eventId, "wr-admin")]);
     const raw = await mintStakeholderToken(b.eventId, b.stakeholderIds[0]);
 
     const cross = await redeemStakeholderToken({
@@ -342,13 +342,13 @@ describe("redeemStakeholderToken", () => {
 
   it("stops working after the portal is closed for that stakeholder", async () => {
     const fixture = await createFixture();
-    await openPortal(fixture.eventId);
+    await openPortal(fixture.eventId, "wr-admin");
     const raw = await mintStakeholderToken(fixture.eventId, fixture.stakeholderIds[0]);
     expect(
       (await redeemStakeholderToken({ rawToken: raw, eventId: fixture.eventId })).ok,
     ).toBe(true);
 
-    await closePortalFor(fixture.eventId, fixture.stakeholderIds[0]);
+    await closePortalFor(fixture.eventId, fixture.stakeholderIds[0], "wr-admin");
     const after = await redeemStakeholderToken({
       rawToken: raw,
       eventId: fixture.eventId,
@@ -454,7 +454,7 @@ describe("loadPortal", () => {
 describe("markStewardship", () => {
   async function openedFixture() {
     const fixture = await createFixture();
-    await openPortal(fixture.eventId);
+    await openPortal(fixture.eventId, "wr-admin");
     const token = await mintStakeholderToken(
       fixture.eventId,
       fixture.stakeholderIds[0],
@@ -478,10 +478,18 @@ describe("markStewardship", () => {
       .where(eq(submissions.id, fixture.submissionIds[0]));
     expect(row.stewardship).toBe("adopted");
 
+    // Scoped to THIS event: an action-only filter picks up rows left by other
+    // fixtures (and by manual use of the dev database), which is how a test
+    // ends up asserting against somebody else's data.
     const [audit] = await db
       .select()
       .from(auditLog)
-      .where(eq(auditLog.action, "submission.stewardship_marked"));
+      .where(
+        and(
+          eq(auditLog.eventId, fixture.eventId),
+          eq(auditLog.action, "submission.stewardship_marked"),
+        ),
+      );
     expect(audit.actor).toBe(`stakeholder:${fixture.stakeholderIds[0]}`);
     expect(audit.fromValue).toBe("unmarked");
     expect(audit.toValue).toBe("adopted");
@@ -537,7 +545,7 @@ describe("markStewardship", () => {
 
   it("refuses without a valid token", async () => {
     const fixture = await createFixture();
-    await openPortal(fixture.eventId);
+    await openPortal(fixture.eventId, "wr-admin");
     const result = await markStewardship({
       eventId: fixture.eventId,
       token: "not-a-real-token",

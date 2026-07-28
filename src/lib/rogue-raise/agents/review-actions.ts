@@ -25,11 +25,12 @@ import { z } from "zod";
 
 import { db } from "../db";
 import { auditLog, generatedAssets } from "../db/schema";
-import { ACTOR_WR_ADMIN, type AdminEventState } from "../events/state";
+import { type AdminEventState } from "../events/state";
 import { getAgentDefinition, type AgentType } from "./catalog";
 import { runAgent, rerunAgent } from "./execute";
 import { registerAgentHandlers } from "./handlers";
 import { findSecrets, describeSecretFindings } from "./secrets";
+import { adminActor, adminOrError } from "../admin/guard";
 
 // Registering here means every entry point that can run an agent has the
 // handlers loaded, without each route remembering to import them.
@@ -71,6 +72,11 @@ export async function runAgentAction(
   prevState: AdminEventState,
   formData: FormData,
 ): Promise<AdminEventState> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error, version: 1 };
+
   const eventId = str(formData, "event_id");
   const type = str(formData, "agent_type");
   const additionalInstructions = str(formData, "additional_instructions").trim();
@@ -118,6 +124,11 @@ export async function reviewAssetAction(
   prevState: AdminEventState,
   formData: FormData,
 ): Promise<AdminEventState> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error, version: 1 };
+
   const assetId = str(formData, "asset_id");
   const decision = str(formData, "decision") as ReviewDecision;
   const rawNote = str(formData, "note").trim();
@@ -185,7 +196,7 @@ export async function reviewAssetAction(
 
       await tx.insert(auditLog).values({
         eventId: asset.eventId,
-        actor: ACTOR_WR_ADMIN,
+        actor: adminActor(guard.admin),
         action: `generated_asset.${status}`,
         entity: "generated_asset",
         fromValue: asset.reviewStatus,
@@ -244,6 +255,11 @@ export async function editAndApproveAssetAction(
   prevState: AdminEventState,
   formData: FormData,
 ): Promise<AdminEventState> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error, version: 1 };
+
   const assetId = str(formData, "asset_id");
   const title = str(formData, "title").trim();
   const body = str(formData, "body");
@@ -320,7 +336,7 @@ export async function editAndApproveAssetAction(
 
       await tx.insert(auditLog).values({
         eventId: asset.eventId,
-        actor: ACTOR_WR_ADMIN,
+        actor: adminActor(guard.admin),
         action: "generated_asset.edited",
         entity: "generated_asset",
         fromValue: String(asset.version),

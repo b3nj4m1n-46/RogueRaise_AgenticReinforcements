@@ -14,10 +14,14 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "admin:create": "tsx scripts/create-admin.ts",
+    "db:auth-migrate": "drizzle-kit migrate --config drizzle.auth.config.ts",
+    "db:auth-generate": "drizzle-kit generate --config drizzle.auth.config.ts"
   },
   "dependencies": {
     "ai": "^7.0.40",
+    "better-auth": "^1.6.25",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",

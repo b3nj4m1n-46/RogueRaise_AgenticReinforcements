@@ -11,8 +11,6 @@
  */
 
 /** Audit actor placeholder until per-admin identity arrives (Better Auth story). */
-export const ACTOR_WR_ADMIN = "wr-admin";
-
 /**
  * `useActionState` state. The actions only ever RETURN a failure shape — success
  * is a PRG redirect to `/admin/sponsors`. Absent errors == idle initial state.

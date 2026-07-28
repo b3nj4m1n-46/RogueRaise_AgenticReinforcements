@@ -17,6 +17,7 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { auditLog, events, magicLinkTokens, participants } from "../db/schema";
 import { getEmailAdapter } from "../integrations/email";
+import { createPacer } from "../integrations/rate-limit";
 import { generateMagicToken } from "../sponsors/magic-link";
 import { PARTICIPANT_ROLE } from "../participants/access";
 import { buildSubmissionInviteEmail } from "./emails";
@@ -41,7 +42,10 @@ export type InviteOutcome =
   | { ok: true; sent: number; skipped: number; failed: number }
   | { ok: false; reason: string };
 
-export async function sendSubmissionInvites(eventId: string): Promise<InviteOutcome> {
+export async function sendSubmissionInvites(
+  eventId: string,
+  actor: string,
+): Promise<InviteOutcome> {
   const [event] = await db
     .select({ id: events.id, title: events.title, status: events.status })
     .from(events)
@@ -67,6 +71,10 @@ export async function sendSubmissionInvites(eventId: string): Promise<InviteOutc
   let sent = 0;
   let skipped = 0;
   let failed = 0;
+
+  // Paced so a large blast doesn't trip the provider's per-second limit
+  // and lose the tail of the list to 429s. See integrations/rate-limit.ts.
+  const pacer = createPacer();
 
   for (const participant of registered) {
     const [live] = await db
@@ -101,7 +109,7 @@ export async function sendSubmissionInvites(eventId: string): Promise<InviteOutc
       // registration and stamping it here would misdate that.
       await tx.insert(auditLog).values({
         eventId,
-        actor: "wr-admin",
+        actor,
         action: "submission_invite.sent",
         entity: "participant",
         toValue: "sent",
@@ -109,6 +117,7 @@ export async function sendSubmissionInvites(eventId: string): Promise<InviteOutc
       });
     });
 
+    await pacer.wait();
     const [result] = await Promise.allSettled([
       getEmailAdapter().send(
         buildSubmissionInviteEmail({

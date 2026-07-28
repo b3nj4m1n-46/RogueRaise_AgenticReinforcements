@@ -40,6 +40,8 @@ export function ResultsConsole({ results }: { results: ResultsView }) {
     { kind: "ok" | "error"; text: string } | null
   >(null);
   const [newAward, setNewAward] = useState({ label: "", criterionId: "" });
+  /** Chosen-but-not-yet-saved winners, keyed by award id. */
+  const [draftWinners, setDraftWinners] = useState<Record<string, string>>({});
 
   const teamName = (id: string) =>
     rows.find((r) => r.submissionId === id)?.teamName ?? "—";
@@ -341,22 +343,21 @@ export function ResultsConsole({ results }: { results: ResultsView }) {
                     >
                       Winner
                     </label>
+                    {/*
+                      * Committed by the button below, never by `onChange`. On
+                      * Windows, arrowing through a collapsed select fires a
+                      * change event PER OPTION — so a keyboard admin walking a
+                      * list of teams would assign, and announce, a different
+                      * winner for every team they passed. On the one screen
+                      * whose whole point is that a person decides deliberately,
+                      * that is the wrong interaction.
+                      */}
                     <select
                       id={`winner-${award.id}`}
-                      defaultValue={award.winningSubmissionId ?? ""}
-                      disabled={pending || Boolean(award.announcedAt)}
+                      value={draftWinners[award.id] ?? award.winningSubmissionId ?? ""}
+                      disabled={Boolean(award.announcedAt)}
                       onChange={(e) =>
-                        run(
-                          () =>
-                            setAwardWinner(
-                              event.id,
-                              award.id,
-                              e.target.value || null,
-                            ),
-                          e.target.value
-                            ? `${award.label}: ${teamName(e.target.value)}.`
-                            : `${award.label}: winner cleared.`,
-                        )
+                        setDraftWinners((d) => ({ ...d, [award.id]: e.target.value }))
                       }
                       className="h-11 rounded-md border border-input bg-background px-3 text-ink disabled:opacity-60"
                     >
@@ -375,6 +376,29 @@ export function ResultsConsole({ results }: { results: ResultsView }) {
                       <p className="text-sm text-ink/70">
                         Currently: {award.winningTeamName}
                       </p>
+                    ) : null}
+                    {!award.announcedAt &&
+                    (draftWinners[award.id] ?? award.winningSubmissionId ?? "") !==
+                      (award.winningSubmissionId ?? "") ? (
+                      <div>
+                        <Button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => {
+                            const chosen = draftWinners[award.id] ?? "";
+                            run(
+                              () =>
+                                setAwardWinner(event.id, award.id, chosen || null),
+                              chosen
+                                ? `${award.label}: ${teamName(chosen)}.`
+                                : `${award.label}: winner cleared.`,
+                            );
+                          }}
+                          className="h-11"
+                        >
+                          Save winner
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
 

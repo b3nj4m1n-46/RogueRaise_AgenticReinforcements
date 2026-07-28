@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "../db";
 import { auditLog, awardCategories, criteria, submissions } from "../db/schema";
+import { adminActor, adminOrError } from "../admin/guard";
 
 export interface AwardResult {
   ok: boolean;
@@ -24,6 +25,11 @@ export async function createAwardCategory(
   eventId: string,
   input: { label: string; description?: string; criterionId?: string | null },
 ): Promise<AwardResult> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const label = input.label.trim();
   if (label.length < 2) {
     return { ok: false, error: "Give the award a name — at least a couple of characters." };
@@ -56,7 +62,7 @@ export async function createAwardCategory(
 
   await db.insert(auditLog).values({
     eventId,
-    actor: "wr-admin",
+    actor: adminActor(guard.admin),
     action: "award.created",
     entity: "award_category",
     toValue: label,
@@ -77,6 +83,11 @@ export async function setAwardWinner(
   awardId: string,
   submissionId: string | null,
 ): Promise<AwardResult> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const [award] = await db
     .select()
     .from(awardCategories)
@@ -111,7 +122,7 @@ export async function setAwardWinner(
 
   await db.insert(auditLog).values({
     eventId,
-    actor: "wr-admin",
+    actor: adminActor(guard.admin),
     action: submissionId ? "award.winner_set" : "award.winner_cleared",
     entity: "award_category",
     fromValue: award.winningSubmissionId,
@@ -130,6 +141,11 @@ export async function announceAward(
   eventId: string,
   awardId: string,
 ): Promise<AwardResult> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const [award] = await db
     .select()
     .from(awardCategories)
@@ -150,7 +166,7 @@ export async function announceAward(
 
   await db.insert(auditLog).values({
     eventId,
-    actor: "wr-admin",
+    actor: adminActor(guard.admin),
     action: "award.announced",
     entity: "award_category",
     toValue: award.winningSubmissionId,
@@ -167,6 +183,11 @@ export async function reopenAward(
   eventId: string,
   awardId: string,
 ): Promise<AwardResult> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const [award] = await db
     .select()
     .from(awardCategories)
@@ -183,7 +204,7 @@ export async function reopenAward(
 
   await db.insert(auditLog).values({
     eventId,
-    actor: "wr-admin",
+    actor: adminActor(guard.admin),
     action: "award.reopened",
     entity: "award_category",
     metadata: { awardId },
@@ -198,6 +219,11 @@ export async function deleteAwardCategory(
   eventId: string,
   awardId: string,
 ): Promise<AwardResult> {
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const [award] = await db
     .select()
     .from(awardCategories)
@@ -216,7 +242,7 @@ export async function deleteAwardCategory(
   await db.delete(awardCategories).where(eq(awardCategories.id, awardId));
   await db.insert(auditLog).values({
     eventId,
-    actor: "wr-admin",
+    actor: adminActor(guard.admin),
     action: "award.deleted",
     entity: "award_category",
     fromValue: award.label,

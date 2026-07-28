@@ -34,6 +34,11 @@ export function StewardshipControl({
   const [saved, setSaved] = useState(false);
 
   const choose = (next: string) => {
+    // Guarded here rather than by disabling the fieldset. Radios respond to
+    // ARROW KEYS, so a disabled fieldset mid-interaction both commits the wrong
+    // value and blurs the control the user is on — they lose their place and
+    // write a stewardship decision they never meant to make.
+    if (pending) return;
     const previous = value;
     // Optimistic: the click IS the decision, and a radio that doesn't move
     // until a round-trip finishes feels broken. Reverted on failure.
@@ -57,7 +62,7 @@ export function StewardshipControl({
   };
 
   return (
-    <fieldset className="border-0 p-0" disabled={pending}>
+    <fieldset className="border-0 p-0" aria-busy={pending}>
       <legend className="mb-2 font-medium text-ink">
         What happens to this now?
       </legend>
@@ -74,7 +79,9 @@ export function StewardshipControl({
                 "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink",
                 checked
                   ? "border-ink bg-ink/5"
-                  : "border-wr-olive-green/30 hover:bg-muted",
+                  // Full strength: this border IS the control's visible
+                  // boundary, and a tint fails 1.4.11 Non-text Contrast.
+                  : "border-wr-olive-green hover:bg-muted",
               )}
             >
               <input

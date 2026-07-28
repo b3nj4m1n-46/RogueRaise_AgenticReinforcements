@@ -16,6 +16,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { auditLog, events, magicLinkTokens, stakeholders, submissions } from "../db/schema";
 import { getEmailAdapter } from "../integrations/email";
+import { createPacer } from "../integrations/rate-limit";
 import { generateMagicToken } from "../sponsors/magic-link";
 import { STAKEHOLDER_ROLE } from "./access";
 import { buildPortalInviteEmail } from "./emails";
@@ -46,6 +47,7 @@ export type PortalInviteOutcome =
 
 export async function openPortal(
   eventId: string,
+  actor: string,
   options: { resend?: boolean } = {},
 ): Promise<PortalInviteOutcome> {
   const [event] = await db
@@ -81,6 +83,10 @@ export async function openPortal(
   let skipped = 0;
   let failed = 0;
 
+  // Paced so a large blast doesn't trip the provider's per-second limit
+  // and lose the tail of the list to 429s. See integrations/rate-limit.ts.
+  const pacer = createPacer();
+
   for (const stakeholder of stakeholderRows) {
     // Already let in and told — pressing the button again is a no-op unless
     // the caller explicitly asks for a resend.
@@ -105,7 +111,7 @@ export async function openPortal(
       });
       await tx.insert(auditLog).values({
         eventId,
-        actor: "wr-admin",
+        actor,
         action: "portal.opened",
         entity: "stakeholder",
         toValue: "sent",
@@ -114,6 +120,7 @@ export async function openPortal(
       });
     });
 
+    await pacer.wait();
     const [result] = await Promise.allSettled([
       getEmailAdapter().send(
         buildPortalInviteEmail({
@@ -152,6 +159,7 @@ export async function openPortal(
 export async function closePortalFor(
   eventId: string,
   stakeholderId: string,
+  actor: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const [stakeholder] = await db
     .select()
@@ -182,7 +190,7 @@ export async function closePortalFor(
       );
     await tx.insert(auditLog).values({
       eventId,
-      actor: "wr-admin",
+      actor,
       action: "portal.closed",
       entity: "stakeholder",
       metadata: { eventId, stakeholderId },
