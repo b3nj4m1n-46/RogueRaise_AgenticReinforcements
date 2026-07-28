@@ -3,8 +3,8 @@ metadata:
   created_at:   2026-07-27T21:35:00-07:00
   activated_at: 2026-07-27T21:35:00-07:00
   planned_at:   2026-07-27T21:40:00-07:00
-  finished_at:
-  updated_at:   2026-07-27T21:40:00-07:00
+  finished_at:  2026-07-27T21:38:00-07:00
+  updated_at:   2026-07-27T21:38:00-07:00
 -->
 
 # Story: Agent Run Infrastructure
@@ -69,3 +69,52 @@ Unit: catalog invariants (every agent produces at least one asset type; trigger 
 
 - The gateway provider can't be exercised without credentials; its shape is typechecked but unverified at runtime, and that is stated plainly rather than implied.
 - The inline runner means a long agent is still bounded by the request timeout until WDK lands — acceptable while no agent is long, and the reason M4 owns it.
+
+## Review
+
+**Date:** 2026-07-27 · **Commit reviewed:** 52a261a · Self-review against ACs · **Status: all 9 ACs met; 1 defect found by test and fixed**
+
+### Acceptance criteria
+
+| # | AC | Verdict |
+|---|----|---------|
+| 1 | Catalog encodes PRD §11.2 with triggers, asset types, review gates | ✅ 7 agents; unit tests pin every trigger status and asset type against the real Postgres enums, so a typo becomes a build failure rather than an insert error |
+| 2 | `AgentRun` row with inputs/logs/cost/timestamps; audited transitions | ✅ integration test asserts the fields and the exact audit sequence |
+| 3 | Execution gated on `Event.status`, refusal recorded | ✅ handler is asserted *not called*; refusal audit row present |
+| 4 | Assets attributed and versioned per (event, type) | ✅ re-run yields version 2 with a different `agent_run_id`; types version independently |
+| 5 | Everything lands `pending`; nothing auto-publishes | ✅ there is no code path that sets another value at creation |
+| 6 | Re-runnable with additional instructions | ✅ new run records `parentRunId` + the instructions; the first attempt survives |
+| 7 | Interrupted runs recoverable | ✅ `reclaimStaleRuns` fails an abandoned run with an honest reason; an in-flight run is left alone |
+| 8 | One model adapter; labelled dev provider; refused in production | ✅ asset body carries the banner; run log says which provider ran |
+| 9 | Cost recorded per run and queryable per event | ✅ `totalCostForEvent` |
+| 10 | No secret material in an asset | ✅ run fails, **nothing** is stored (including the innocent sibling document in the same batch), and the error never repeats the secret |
+
+### Defect found and fixed
+
+**The refusal audit row was being discarded.** `startRun` inserted `agent_run.refused` and then threw `AgentNotTriggerableError` — from *inside* the transaction, so the rollback took the audit row with it. The AC and the code comment both claimed the refusal was recorded; it wasn't. The integration test asserting the audit sequence caught it. The row is now written after the commit — the same "audit outside the failed transaction" shape as email-after-commit in the sponsor actions.
+
+### Deliberate limitations, stated plainly
+
+- **Not durable yet.** The runner is inline; a long agent is bounded by the request timeout until WDK is wired (M4 owns it). The `AgentRun` record is what makes durability *possible* later, and reclamation is what makes the gap survivable now.
+- **The gateway provider has never run against a live key.** It typechecks against the AI SDK; that is all that can honestly be claimed. HANDOFF carries a smoke-test checklist item.
+- **No UI yet** — runs and assets are invisible to staff until M3b.
+
+## Learnings
+
+**What went well**
+
+- Putting *all* persistence in `runs.ts` and giving handlers a data-only contract makes the hard guarantees structural. "Every asset is versioned and attributable" isn't a rule contributors must remember; there is no other way to write an asset.
+- Encoding the PRD table as data and then testing it against the Postgres enums turned a whole class of future runtime failure into a build failure. Cheap, and it will keep paying as agents are added.
+- Writing the secret scanner's *negative* cases first — a realistic setup document full of the word "key" — shaped the patterns far better than the positive cases did. A scanner that fires on prose about credentials would make the documents these agents exist to write impossible.
+- Failing the whole asset batch on one bad document, and asserting that in a test, is the right default: a partially-stored agent output is worse than none.
+
+**What was surprising**
+
+- **An audit row written inside a transaction that throws does not exist.** Obvious once stated, and I had already learned the equivalent lesson for emails in story 1 — but the "record the refusal" pattern *looks* different enough from "send after commit" that it didn't transfer. The rule generalizes: anything whose purpose is to survive a failure must not be inside the thing that fails.
+- The AI SDK's bare `"provider/model"` string genuinely is the whole gateway integration — no client construction, no provider import. The seam ended up smaller than the dev provider it sits beside.
+
+**Do differently next time**
+
+- When a test asserts an exact audit sequence, write it *before* the code — it caught the one real bug here, and it would have caught it a step earlier.
+- Carry-forwards for **M3b (review UI + first real agent)**: the console needs a runs-and-assets read model (`agents/queries.ts`, deliberately not built yet); approve/edit/reject writes `generated_assets.review_status` + `review_note` and must audit; the `admin_and_stakeholders` gate has no stakeholder-facing surface yet, so M3b should either build it or narrow to admin-only and say so.
+- The `paused_for_review` run status is modelled but unused — it's for the durable-workflow case. It should stay unused until WDK lands rather than being repurposed for asset review, which is a different thing entirely.
