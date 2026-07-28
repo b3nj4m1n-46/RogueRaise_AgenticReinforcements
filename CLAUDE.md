@@ -37,6 +37,8 @@ This is built as a **standalone Next.js app now, to be merged into WR's existing
 - **GitHub App** (not a PAT) with permission to create repos in the WR org, push commits, open PRs. Used by the repo-provisioning agent and for LOC/category stats.
 - **Validation:** server actions validated with **zod** (share client/server schemas). **zod v4 does not short-circuit a field's checks** — a `.refine()` predicate still runs after an earlier `.regex()`/`.min()` on the same field has failed. Every predicate passed to `.refine()` must therefore be **total**: return `false` for malformed input, never throw. A throwing helper that is perfectly correct on its own (e.g. a date parser) will take down the whole form the moment a user opens an empty row (see `intake/schedule.ts` `isFridayDate`).
 - **`"use server"` modules may export ONLY async functions** (Next 16 enforces this at build/runtime). Constants, initial-state objects, and helpers belong in a plain sibling module (see `src/lib/rogue-raise/sponsors/form-state.ts`, `admin-decision-state.ts`). Type-only exports are fine.
+- **Controlled inputs desync from React's post-action `form.reset()`.** React resets the form once a server action settles; because the rendered value is unchanged, the reconciler writes nothing back and the DOM keeps the reset. Key the `<form>` on the action result's version (see `src/app/judge/score/[eventId]/scorecard.tsx`) and layer local edits over the server's saved value rather than seeding state from it once.
+- **A multi-line JSX text node that begins right after `{expr}` loses its leading space** at compile time, and Prettier strips the `{" "}` fix. Use a template literal — `` {`… ${value} …`} `` — for prose that interpolates.
 
 ## Data Model (PRD §4, Appendix A)
 

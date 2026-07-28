@@ -360,6 +360,45 @@ export async function checkGithubUser(
   }
 }
 
+/**
+ * Does this repository exist and is it reachable?
+ *
+ * Same three-valued, non-blocking contract as `checkGithubUser`: a rate limit
+ * or timeout is `"unknown"`, and callers let `"unknown"` through. A team who
+ * just built something for two days must not be blocked from submitting by our
+ * API quota.
+ *
+ * Returns `false` only on a definite 404 — which for a private repo is
+ * indistinguishable from "doesn't exist", so the caller's copy has to say so.
+ */
+export async function checkGithubRepo(
+  url: string,
+): Promise<true | false | "unknown"> {
+  const match = /github\.com\/([^/\s]+)\/([^/\s?#]+?)(?:\.git)?\/?$/i.exec(url.trim());
+  if (!match) return false;
+  const [, owner, repo] = match;
+
+  const config = readAppConfig();
+  try {
+    const headers: Record<string, string> = {
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+    };
+    if (config) {
+      headers.authorization = `Bearer ${await installationToken(config)}`;
+    }
+    const response = await fetch(
+      `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      { headers, signal: AbortSignal.timeout(4000) },
+    );
+    if (response.status === 404) return false;
+    if (response.ok) return true;
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 /** Test seam — resets provider selection and the cached installation token. */
 export function resetGithubAdapter(): void {
   adapter = undefined;
