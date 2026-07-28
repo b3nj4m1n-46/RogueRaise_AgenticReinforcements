@@ -86,7 +86,15 @@ export const AGENT_CATALOG: Record<AgentType, AgentDefinition> = {
     description:
       "Drafts a personal invitation to each judge the sponsor named, in the voice of the event.",
     phase: "1.2",
-    triggerStatuses: ["intake_complete", "repo_approved", "registration_open"],
+    // Contiguous from intake onward: judges can be invited as soon as the
+    // sponsor has named them, and being blocked during repo review would be an
+    // artificial hole in the middle of the flow.
+    triggerStatuses: [
+      "intake_complete",
+      "repo_review",
+      "repo_approved",
+      "registration_open",
+    ],
     assetTypes: ["judge_email"],
     reviewGate: "admin",
     priority: "must",

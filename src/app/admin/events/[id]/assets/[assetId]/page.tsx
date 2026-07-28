@@ -93,12 +93,25 @@ export default async function AdminAssetPage({
               {asset.body}
             </pre>
           </div>
-        ) : (
-          <p className="text-ink/60">
-            This asset is a file rather than text
-            {asset.blobUrl ? " — download it from storage." : "."}
+        ) : null}
+
+        {asset.blobUrl ? (
+          <p className="text-sm">
+            <a
+              href={`/admin/events/${id}/assets/${asset.id}/download`}
+              className="font-medium text-ink underline underline-offset-4"
+            >
+              Download the file →
+            </a>{" "}
+            <span className="text-ink/60">
+              Re-run the agent to regenerate it.
+            </span>
           </p>
-        )}
+        ) : null}
+
+        {!asset.body && !asset.blobUrl ? (
+          <p className="text-ink/60">This asset has no content.</p>
+        ) : null}
       </section>
 
       {others.length > 0 ? (
