@@ -11,6 +11,8 @@ import { useEffect, useRef } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 import { initialAdminEventState } from "@/lib/rogue-raise/events/state";
 import { provisionRepoAction } from "@/lib/rogue-raise/repo/admin-actions";
@@ -131,6 +133,17 @@ export function RepoCard({
             ))}
           </ul>
         </div>
+      ) : null}
+
+      {repoUrl ? (
+        <p className="text-sm">
+          <Link
+            href={`/admin/events/${eventId}/repo-review`}
+            className="font-medium text-ink underline underline-offset-4"
+          >
+            Review the repository file by file →
+          </Link>
+        </p>
       ) : null}
 
       {ready ? (

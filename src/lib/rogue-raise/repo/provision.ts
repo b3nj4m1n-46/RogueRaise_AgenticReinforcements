@@ -17,14 +17,15 @@
  *     `repo_generating` with no repo is the same "in-flight forever" problem the
  *     agent runs already solve, and it deserves the same answer.
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { findSecrets, describeSecretFindings } from "../agents/secrets";
 import { db } from "../db";
-import { auditLog, contextRepos, events, generatedAssets } from "../db/schema";
+import { auditLog, contextRepos, events } from "../db/schema";
 import { loadAdminEvent } from "../events/queries";
 import { getGithubAdapter, type RepoFiles } from "../integrations/github";
 import { describeSchedule, formatWeekendLabel } from "../intake/schedule";
+import { latestAssetsByType } from "./assets";
 import {
   buildRepoFiles,
   repoNameForEvent,
@@ -75,35 +76,6 @@ export async function describeProvisioningBlockers(eventId: string): Promise<str
     }
   }
   return blockers;
-}
-
-interface LatestAsset {
-  type: string;
-  title: string | null;
-  body: string | null;
-  version: number;
-  reviewStatus: string;
-}
-
-/** Latest version of each asset type — superseded versions are never pushed. */
-async function latestAssetsByType(eventId: string): Promise<Map<string, LatestAsset>> {
-  const rows = await db
-    .select({
-      type: generatedAssets.type,
-      title: generatedAssets.title,
-      body: generatedAssets.body,
-      version: generatedAssets.version,
-      reviewStatus: generatedAssets.reviewStatus,
-    })
-    .from(generatedAssets)
-    .where(eq(generatedAssets.eventId, eventId))
-    .orderBy(generatedAssets.type, desc(generatedAssets.version));
-
-  const latest = new Map<string, LatestAsset>();
-  for (const row of rows) {
-    if (!latest.has(row.type)) latest.set(row.type, row);
-  }
-  return latest;
 }
 
 export async function provisionContextRepo(eventId: string): Promise<ProvisionOutcome> {

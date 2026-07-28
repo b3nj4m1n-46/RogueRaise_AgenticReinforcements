@@ -89,6 +89,12 @@ export default async function AdminEventPage({
         >
           Agents &amp; drafts →
         </Link>
+        <Link
+          href={`/admin/events/${id}/repo-review`}
+          className="text-sm font-medium text-ink underline underline-offset-4"
+        >
+          Repo review →
+        </Link>
       </div>
 
       <header className="flex flex-col gap-3">

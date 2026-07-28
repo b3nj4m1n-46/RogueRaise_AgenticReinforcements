@@ -291,6 +291,27 @@ export const contextRepos = rogueRaise.table("context_repos", {
   updatedAt: updatedAt(),
 });
 
+/**
+ * Per-file feedback on a pushed context repo (PRD §5.3.2). Append-only: each
+ * row is one comment, so a file's history reads as a thread rather than a
+ * single overwritten note. `decision` is set on the comment that carried one.
+ */
+export const repoReviewComments = rogueRaise.table("repo_review_comments", {
+  id: pk(),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id),
+  /** Repo-relative path, or null for a comment on the repo as a whole. */
+  filePath: text("file_path"),
+  /** Who left it — `wr_admin` or `stakeholder` until real identities exist. */
+  authorRole: text("author_role").notNull(),
+  authorLabel: text("author_label"),
+  body: text("body").notNull(),
+  /** `approve` / `request_changes` / null for a plain comment. */
+  decision: text("decision"),
+  createdAt: createdAt(),
+});
+
 export const agentRuns = rogueRaise.table("agent_runs", {
   id: pk(),
   eventId: uuid("event_id")
@@ -517,6 +538,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   judges: many(judges),
   agentRuns: many(agentRuns),
   generatedAssets: many(generatedAssets),
+  repoReviewComments: many(repoReviewComments),
   participants: many(participants),
   teams: many(teams),
   submissions: many(submissions),
@@ -674,6 +696,16 @@ export const magicLinkTokensRelations = relations(
   ({ one }) => ({
     event: one(events, {
       fields: [magicLinkTokens.eventId],
+      references: [events.id],
+    }),
+  }),
+);
+
+export const repoReviewCommentsRelations = relations(
+  repoReviewComments,
+  ({ one }) => ({
+    event: one(events, {
+      fields: [repoReviewComments.eventId],
       references: [events.id],
     }),
   }),
