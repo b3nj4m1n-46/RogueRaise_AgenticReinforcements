@@ -8,6 +8,7 @@
  */
 import { registerAgentHandler } from "../registry";
 import { contextResearchHandler } from "./context-research";
+import { judgeInvitationHandler } from "./judge-invitation";
 
 let registered = false;
 
@@ -15,7 +16,8 @@ export function registerAgentHandlers(): void {
   if (registered) return;
   registered = true;
   registerAgentHandler("context_research_repo", contextResearchHandler);
-  // M4: judge_invitation_email, kickoff_deck
+  registerAgentHandler("judge_invitation_email", judgeInvitationHandler);
+  // M5: kickoff_deck
   // M6: tech_sponsor_press_outreach, social_marketing, landing_page_content
   // M9: submission_categorizer
 }

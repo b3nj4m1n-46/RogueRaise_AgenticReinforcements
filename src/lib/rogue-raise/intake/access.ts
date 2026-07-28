@@ -24,14 +24,8 @@
  * `revoked_at` are the controls. `consumed_at` stays reserved for genuinely
  * single-use flows (e.g. a future one-shot judge confirmation).
  */
-import { timingSafeEqual } from "node:crypto";
-
-import { eq } from "drizzle-orm";
-import { z } from "zod";
-
-import { db } from "../db";
-import { events, magicLinkTokens, organizations } from "../db/schema";
-import { hashMagicToken, SPONSOR_POC_ROLE } from "../sponsors/magic-link";
+import { redeemMagicToken } from "../access/redeem";
+import { SPONSOR_POC_ROLE } from "../sponsors/magic-link";
 
 /** Why access was refused. `invalid` is the deliberately opaque catch-all. */
 export type IntakeAccessFailure =
@@ -75,93 +69,35 @@ export function canEditIntake(eventStatus: string): boolean {
   return (EDITABLE_INTAKE_STATUSES as readonly string[]).includes(eventStatus);
 }
 
-/** Raw tokens are `randomBytes(32).toString("base64url")` — 43 URL-safe chars. */
-const RAW_TOKEN_REGEX = /^[A-Za-z0-9_-]{20,200}$/;
-
-/** Constant-time hex-digest comparison; length mismatch is an immediate false. */
-function hashesMatch(a: string, b: string): boolean {
-  const left = Buffer.from(a, "hex");
-  const right = Buffer.from(b, "hex");
-  if (left.length !== right.length || left.length === 0) return false;
-  return timingSafeEqual(left, right);
-}
-
 export async function redeemIntakeToken(input: {
   eventId: string;
   rawToken: string;
   /** Injectable for tests; defaults to now. */
   now?: Date;
 }): Promise<IntakeAccessResult> {
-  const now = input.now ?? new Date();
+  const result = await redeemMagicToken({
+    rawToken: input.rawToken,
+    role: SPONSOR_POC_ROLE,
+    eventId: input.eventId,
+    now: input.now,
+  });
+  if (!result.ok) return { ok: false, reason: result.reason };
 
-  // Shape checks first — a malformed id or token never reaches the database.
-  if (!z.uuid().safeParse(input.eventId).success) {
-    return { ok: false, reason: "invalid" };
-  }
-  if (!RAW_TOKEN_REGEX.test(input.rawToken)) {
-    return { ok: false, reason: "invalid" };
-  }
-
-  const tokenHash = hashMagicToken(input.rawToken);
-
-  const [row] = await db
-    .select({
-      id: magicLinkTokens.id,
-      eventId: magicLinkTokens.eventId,
-      role: magicLinkTokens.role,
-      email: magicLinkTokens.email,
-      tokenHash: magicLinkTokens.tokenHash,
-      expiresAt: magicLinkTokens.expiresAt,
-      revokedAt: magicLinkTokens.revokedAt,
-    })
-    .from(magicLinkTokens)
-    .where(eq(magicLinkTokens.tokenHash, tokenHash))
-    .limit(1);
-
-  // No row, or a hash that doesn't survive the constant-time re-check.
-  if (!row || !hashesMatch(row.tokenHash, tokenHash)) {
-    return { ok: false, reason: "invalid" };
-  }
-
-  // Everything below here is only reachable by someone holding a real token.
-  if (row.role !== SPONSOR_POC_ROLE) return { ok: false, reason: "wrong_role" };
-  if (row.eventId !== input.eventId) return { ok: false, reason: "wrong_event" };
-  if (row.revokedAt) return { ok: false, reason: "revoked" };
-  if (row.expiresAt.getTime() <= now.getTime()) {
-    return { ok: false, reason: "expired" };
-  }
-
-  const [event] = await db
-    .select({
-      id: events.id,
-      title: events.title,
-      slug: events.slug,
-      status: events.status,
-      orgId: events.orgId,
-      organizationName: organizations.name,
-    })
-    .from(events)
-    .innerJoin(organizations, eq(events.orgId, organizations.id))
-    .where(eq(events.id, row.eventId))
-    .limit(1);
-
-  // A token whose event vanished is indistinguishable from a bad token.
-  if (!event) return { ok: false, reason: "invalid" };
-
+  const { token } = result;
   return {
     ok: true,
     access: {
-      tokenId: row.id,
-      email: row.email,
-      expiresAt: row.expiresAt,
+      tokenId: token.tokenId,
+      email: token.email,
+      expiresAt: token.expiresAt,
       event: {
-        id: event.id,
-        title: event.title,
-        slug: event.slug,
-        status: event.status,
-        orgId: event.orgId,
+        id: token.event.id,
+        title: token.event.title,
+        slug: token.event.slug,
+        status: token.event.status,
+        orgId: token.event.orgId,
       },
-      organizationName: event.organizationName,
+      organizationName: token.event.organizationName,
     },
   };
 }

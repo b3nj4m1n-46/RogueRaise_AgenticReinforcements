@@ -12,6 +12,7 @@ import {
 import { totalCostForEvent } from "@/lib/rogue-raise/agents/runs";
 import { loadAdminEvent } from "@/lib/rogue-raise/events/queries";
 import { eventStatusLabel } from "@/lib/rogue-raise/events/status";
+import { listJudges } from "@/lib/rogue-raise/judges/queries";
 import { loadContextRepo } from "@/lib/rogue-raise/repo/queries";
 import {
   canProvisionRepo,
@@ -20,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { AgentRunner } from "./agent-runner";
+import { JudgeCard } from "./judge-card";
 import { RepoCard } from "./repo-card";
 
 export const metadata = { title: "Agents · Rogue Raise" };
@@ -76,13 +78,17 @@ export default async function AdminEventAgentsPage({
   const event = await loadAdminEvent(id);
   if (!event) notFound();
 
-  const [runs, assetGroups, costTokens, contextRepo, blockers] = await Promise.all([
-    listAgentRuns(id),
-    listAssetGroups(id),
-    totalCostForEvent(id),
-    loadContextRepo(id),
-    describeProvisioningBlockers(id),
-  ]);
+  const [runs, assetGroups, costTokens, contextRepo, blockers, judges] =
+    await Promise.all([
+      listAgentRuns(id),
+      listAssetGroups(id),
+      totalCostForEvent(id),
+      loadContextRepo(id),
+      describeProvisioningBlockers(id),
+      listJudges(id),
+    ]);
+
+  const judgeDraft = assetGroups.find((g) => g.type === "judge_email")?.latest ?? null;
 
   const runsByType = new Map<string, typeof runs>();
   for (const run of runs) {
@@ -184,6 +190,27 @@ export default async function AdminEventAgentsPage({
           </ul>
         )}
       </section>
+
+      <JudgeCard
+        eventId={id}
+        judges={judges.map((j) => ({
+          id: j.id,
+          name: j.name,
+          email: j.email,
+          completed: j.backgroundCompletedAt !== null,
+          hasQuestion: Boolean(j.criteriaQuestions),
+        }))}
+        canSend={judgeDraft?.reviewStatus === "approved" && judges.length > 0}
+        blockedReason={
+          judges.length === 0
+            ? null
+            : !judgeDraft
+              ? "Draft the invitations first, with the judge invitation agent below."
+              : judgeDraft.reviewStatus !== "approved"
+                ? `The invitations are ${judgeDraft.reviewStatus.replace(/_/g, " ")} — they need approving before anything is sent.`
+                : null
+        }
+      />
 
       <RepoCard
         eventId={id}
