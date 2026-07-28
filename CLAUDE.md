@@ -36,6 +36,7 @@ This is built as a **standalone Next.js app now, to be merged into WR's existing
 - **Email** via **Resend** (templated + AI-drafted). All bulk sends go through a queue and must be **idempotent**.
 - **GitHub App** (not a PAT) with permission to create repos in the WR org, push commits, open PRs. Used by the repo-provisioning agent and for LOC/category stats.
 - **Validation:** server actions validated with **zod** (share client/server schemas).
+- **`"use server"` modules may export ONLY async functions** (Next 16 enforces this at build/runtime). Constants, initial-state objects, and helpers belong in a plain sibling module (see `src/lib/rogue-raise/sponsors/form-state.ts`, `admin-decision-state.ts`). Type-only exports are fine.
 
 ## Data Model (PRD §4, Appendix A)
 

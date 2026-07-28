@@ -4,6 +4,41 @@ This app was built standalone (own local Postgres, own Next.js app) so the full
 flow works on a laptop with no WR credentials, then hands cleanly to WR tech
 staff to merge into the main site (PRD §3.1). This guide is the merge contract.
 
+## ⚠️ Admin console is dev-open — DO NOT deploy publicly yet
+
+`/admin/*` (the WR staff console, including the sponsor curation queue's
+**approve/reject** actions) has **no authentication yet** — Better Auth's `admin`
+plugin is a separate, not-yet-built story. These are privileged, externally
+visible, state-mutating actions (they transition events, mint magic-link tokens,
+and send email).
+
+Until the auth story lands:
+
+- `src/middleware.ts` hard-refuses every `/admin/*` request with **403** unless
+  `RR_ADMIN_DEV_OPEN === "true"`. That flag is set **only in local `.env`** and is
+  documented `false` in `.env.example`. **Never set it `true` in a deployed
+  environment.** Remove the flag + this gate once real admin auth exists.
+- Audit rows for admin decisions record `actor: "wr-admin"` as a **placeholder**;
+  swap it for the real authenticated admin identity when auth lands.
+
+### Magic-link tokens (sponsor intake)
+
+Approve mints a `rogue_raise.magic_link_tokens` row: role `sponsor_poc`,
+event-scoped, **hashed** token (`HMAC-SHA256`), **14-day TTL**. The raw token
+appears **only** in the emailed intake URL — never stored, logged, or audited.
+
+The intake **redemption** story (next) MUST reuse the shared helper in
+`src/lib/rogue-raise/sponsors/magic-link.ts`:
+
+- hash the incoming raw token with `hashMagicToken` and compare against the
+  stored `token_hash` with `crypto.timingSafeEqual` — **never** a plain `===`
+  (timing oracle);
+- reject expired (`expires_at`), consumed (`consumed_at`), or revoked
+  (`revoked_at`) tokens; set `consumed_at` on successful single use.
+
+Token reissue/resend (if the 14-day window lapses before intake ships) is owned
+by the intake story.
+
 ## Portability seams
 
 Everything WR-specific is isolated behind a small number of seams — swap these,

@@ -12,6 +12,7 @@ WR staff swap credentials/providers without touching feature logic.
 | `ai-gateway` | Vercel AI Gateway | `AI_GATEWAY_API_KEY`, `RR_AI_MODEL_*` |
 | `github` | GitHub App | `RR_GITHUB_*`, `RR_GITHUB_ORG` |
 | `auth` | Better Auth | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` |
+| `spam` | Vercel BotID / hCaptcha (honeypot + signed timestamp in dev) | `RR_SPAM_SECRET` (falls back to `RR_MAGIC_LINK_SECRET`) |
 
 Each adapter exports an interface + a factory (`getXAdapter()`) that picks a real
 implementation when configured and a dev fallback otherwise, so the whole flow
