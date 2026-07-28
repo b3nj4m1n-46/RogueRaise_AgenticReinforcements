@@ -9,6 +9,21 @@ function renderInline(content: Inline[]) {
   return content.map((part, index) => {
     if (part.kind === "bold") return <strong key={index}>{part.text}</strong>;
     if (part.kind === "italic") return <em key={index}>{part.text}</em>;
+    if (part.kind === "link") {
+      return (
+        <a
+          key={index}
+          href={part.href}
+          target="_blank"
+          // The href comes from a model, so it is treated as hostile: a new
+          // context, no referrer, and no window.opener back into this page.
+          rel="noreferrer noopener nofollow"
+          className="text-ink underline underline-offset-4"
+        >
+          {part.text}
+        </a>
+      );
+    }
     return <span key={index}>{part.text}</span>;
   });
 }

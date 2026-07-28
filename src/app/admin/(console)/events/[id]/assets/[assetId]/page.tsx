@@ -4,6 +4,10 @@ import { z } from "zod";
 
 import { listAssets, loadAsset } from "@/lib/rogue-raise/agents/queries";
 import { loadAdminEvent } from "@/lib/rogue-raise/events/queries";
+import {
+  loadStakeholderVerdicts,
+  needsStakeholderReview,
+} from "@/lib/rogue-raise/stakeholders/review";
 
 import { AssetReview } from "./asset-review";
 
@@ -45,6 +49,15 @@ export default async function AdminAssetPage({
   const isLatest = sameType[0]?.id === asset.id;
   const others = sameType.filter((a) => a.id !== asset.id);
 
+  // PRD §11.2 names stakeholders in this agent's review gate. Their verdict
+  // doesn't gate the button — a busy stakeholder must not be able to stall an
+  // event — but approving over an outstanding "needs changes" should be a
+  // deliberate act, so it is stated here rather than left to be discovered.
+  const stakeholderReviewed = needsStakeholderReview(asset.type);
+  const verdict = stakeholderReviewed
+    ? (await loadStakeholderVerdicts(id)).get(asset.id)
+    : undefined;
+
   return (
     <main className="mx-auto flex min-h-full max-w-3xl flex-col gap-8 px-6 py-16">
       <div>
@@ -77,6 +90,65 @@ export default async function AdminAssetPage({
           </p>
         ) : null}
       </header>
+
+      {stakeholderReviewed ? (
+        <section
+          aria-labelledby="stakeholder-review"
+          className={
+            verdict && verdict.changesRequested > 0
+              ? "flex flex-col gap-3 rounded-lg border-2 border-ink bg-muted/60 p-5"
+              : "flex flex-col gap-3 rounded-lg border border-wr-olive-green/25 p-5"
+          }
+        >
+          <h2
+            id="stakeholder-review"
+            className="font-serif text-xl font-semibold text-ink"
+          >
+            What the stakeholders said
+          </h2>
+          {!verdict || verdict.decisions.length === 0 ? (
+            <p className="max-w-prose text-ink/80">
+              Nobody outside White Rabbit has looked at this yet. This document
+              describes the sponsor&rsquo;s own problem back to them and then goes
+              to every volunteer — send the review link from the agents page
+              before approving, unless there&rsquo;s a reason not to.
+            </p>
+          ) : (
+            <>
+              <ul className="flex flex-col gap-2">
+                {verdict.decisions.map((entry) => (
+                  <li
+                    key={`${entry.label}-${entry.at}`}
+                    className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
+                  >
+                    <span className="font-medium text-ink">
+                      {entry.label ?? "A stakeholder"}
+                    </span>
+                    <span
+                      className={
+                        entry.decision === "approve"
+                          ? "text-ink/70"
+                          : "font-medium text-ink"
+                      }
+                    >
+                      {entry.decision === "approve"
+                        ? "said it looks right"
+                        : "asked for changes"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {verdict.changesRequested > 0 ? (
+                <p className="max-w-prose font-medium text-ink">
+                  Someone has asked for changes. Read their comments on the
+                  review page before approving this — or re-run the agent with
+                  their feedback.
+                </p>
+              ) : null}
+            </>
+          )}
+        </section>
+      ) : null}
 
       <AssetReview
         assetId={asset.id}

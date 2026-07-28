@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { AgentRunner } from "./agent-runner";
+import { ReviewInviteButton } from "./review-invite-button";
 import { JudgeCard } from "./judge-card";
 import { RepoCard } from "./repo-card";
 
@@ -264,13 +265,14 @@ export default async function AdminEventAgentsPage({
                   {definition.reviewGate === "admin_and_stakeholders" ? (
                     <>
                       {" "}
-                      — <strong className="text-ink/80">
-                        the stakeholder half isn&rsquo;t built yet
-                      </strong>
-                      ; approving here is WR Admin only.
+                      — stakeholders read these drafts before volunteers do.
                     </>
                   ) : null}
                 </p>
+
+                {definition.reviewGate === "admin_and_stakeholders" ? (
+                  <ReviewInviteButton eventId={id} />
+                ) : null}
 
                 <AgentRunner
                   eventId={id}

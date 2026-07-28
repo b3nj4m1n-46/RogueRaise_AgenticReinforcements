@@ -14,10 +14,15 @@ portal, with the admin console behind real Better Auth sign-in.
 - `HANDOFF.md` — the merge contract for WR tech staff: portability seams, env vars, the two Drizzle configs, and the checklist.
 - `whiteboard-july-6.md` — earlier planning notes; superseded in detail by the PRD but useful for original intent.
 
-Known gaps are listed in HANDOFF.md, not hidden: agent runs are not yet durable
-(no Vercel Workflows), the AI Gateway / GitHub App / Resend / Blob providers have
-never run against real credentials, there is no stakeholder-facing *review*
-surface, and research documents have no citation checking.
+Known gaps are listed in HANDOFF.md, not hidden. The remaining ones are almost
+all the same shape: **the AI Gateway, GitHub App, Resend, and Blob providers have
+never run against real credentials.** Each is implemented behind an adapter with
+a labelled dev provider that production refuses, so the risk is a wrong API
+detail rather than missing code — they are smoke-test items on the merge
+checklist. Beyond that: the durable-run path (`agents/dispatch.ts`) needs the
+WDK runtime to exercise, and the research agent reasons from the intake rather
+than doing live web research, so its citations are only as good as the model's
+recall.
 
 ## What This Product Is
 

@@ -27,7 +27,8 @@ import { db } from "../db";
 import { auditLog, generatedAssets } from "../db/schema";
 import { type AdminEventState } from "../events/state";
 import { getAgentDefinition, type AgentType } from "./catalog";
-import { runAgent, rerunAgent } from "./execute";
+import { dispatchAgentRun } from "./dispatch";
+import { rerunAgent } from "./execute";
 import { registerAgentHandlers } from "./handlers";
 import { findSecrets, describeSecretFindings } from "./secrets";
 import { adminActor, adminOrError } from "../admin/guard";
@@ -88,25 +89,47 @@ export async function runAgentAction(
   const definition = getAgentDefinition(type);
   if (!definition) return fail(prevState, "That's not an agent we know about.");
 
-  const outcome = previousRunId
-    ? await rerunAgent({
-        eventId,
-        type: type as AgentType,
-        previousRunId,
-        additionalInstructions: additionalInstructions || undefined,
-      })
-    : await runAgent({
-        eventId,
-        type: type as AgentType,
-        additionalInstructions: additionalInstructions || undefined,
-      });
+  // A re-run carries the previous run's context, which the durable path would
+  // have to thread through the workflow boundary; it stays inline until an agent
+  // is long enough for that to matter.
+  if (previousRunId) {
+    const outcome = await rerunAgent({
+      eventId,
+      type: type as AgentType,
+      previousRunId,
+      additionalInstructions: additionalInstructions || undefined,
+    });
+    revalidatePath(`/admin/events/${eventId}/agents`);
+    revalidatePath(`/admin/events/${eventId}`);
+    return outcome.ok
+      ? succeed(
+          prevState,
+          `${definition.label} finished — ${outcome.assetIds.length} draft(s) waiting for review.`,
+        )
+      : fail(prevState, outcome.reason);
+  }
+
+  const dispatched = await dispatchAgentRun({
+    eventId,
+    type: type as AgentType,
+    additionalInstructions: additionalInstructions || undefined,
+  });
 
   revalidatePath(`/admin/events/${eventId}/agents`);
   revalidatePath(`/admin/events/${eventId}`);
 
-  if (!outcome.ok) {
-    return fail(prevState, outcome.reason);
+  // Durable dispatch returns before the agent finishes; the `AgentRun` row is
+  // how the console tracks it from here, exactly as it does an inline run that
+  // is still going.
+  if (!dispatched.outcome) {
+    return succeed(
+      prevState,
+      `${definition.label} is running. Its progress and drafts appear here as it goes — you don't need to wait on this page.`,
+    );
   }
+
+  const outcome = dispatched.outcome;
+  if (!outcome.ok) return fail(prevState, outcome.reason);
   return succeed(
     prevState,
     `${definition.label} finished — ${outcome.assetIds.length} draft(s) waiting for review.`,

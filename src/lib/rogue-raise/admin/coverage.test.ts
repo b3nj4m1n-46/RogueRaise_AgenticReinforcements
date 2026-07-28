@@ -37,6 +37,8 @@ const PUBLIC_OR_TOKEN_GATED: Record<string, string> = {
   "judging/actions.ts::saveScorecard": "judge magic link",
   "submissions/actions.ts::submitProject": "participant magic link",
   "portal/actions.ts::markStewardship": "stakeholder magic link",
+  "stakeholders/review-actions.ts::submitStakeholderReview":
+    "stakeholder magic link (review, which predates portal access)",
 
   // Auth itself.
   "admin/sign-in-actions.ts::signInAdmin":

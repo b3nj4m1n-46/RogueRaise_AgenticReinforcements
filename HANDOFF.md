@@ -128,8 +128,11 @@ not feature code:
   **In production with no token it throws rather than writing to an ephemeral
   filesystem.** Callers persist the opaque `ref` the adapter returns — never a
   path — so switching providers is config, not a data migration.
-  **⚠️ The Vercel Blob provider is not implemented yet**: install `@vercel/blob`
-  and fill in `unwiredVercelBlobAdapter` before the first deploy that accepts
+  The **Vercel provider is implemented** (`@vercel/blob`), writes
+  `access: "private"` unless a caller explicitly asks otherwise, and namespaces
+  its refs (`vercel:<url>`) so a row written by the local provider cannot
+  resolve against production storage. **It has never run against a real
+  `BLOB_READ_WRITE_TOKEN`** — smoke-test it on the first deploy that accepts
   uploads. Intake attachments are private in both providers and are served only
   through the token-gated route
   `/sponsor/intake/[eventId]/attachments/[attachmentId]`
@@ -145,17 +148,32 @@ not feature code:
   JetBrains Mono) are vendored in `src/app/globals.css` + `src/app/layout.tsx`.
   Confirm exact hex against the live site before launch.
 
-### ⚠️ Agent layer: no durable workflow runtime yet
+### Agent layer: durable runs
 
-PRD §3/§11 specifies long agent runs as **durable Vercel Workflows (WDK)** so
-they survive the function timeout, pause for human review, and resume. WDK
-cannot run outside Vercel, so `lib/rogue-raise/agents/execute.ts` ships the
-**inline** executor plus the record-keeping a durable one needs — every run is an
-`agent_runs` row with inputs, logs, cost, and timestamps, and an interrupted run
-is reclaimable rather than stuck. Until WDK is wired, **an agent is bounded by
-the request timeout** (~300s on Fluid Compute). `runAgent` is the seam: a durable
-adapter replaces the handler-invocation step; the gate and the persistence steps
-are unchanged.
+PRD §3/§11 specifies long agent runs as **durable Vercel Workflows (WDK)**.
+`agents/workflow.ts` is the `"use workflow"` module and `agents/dispatch.ts`
+chooses between it and the inline executor:
+
+- `RR_WORKFLOWS_ENABLED="true"` → `start()` the workflow and return; the
+  `agent_runs` row is how the console tracks it, exactly as for a long inline
+  run.
+- Unset (**the default**) → run inline, bounded by the request timeout (~300s on
+  Fluid Compute).
+- Enabled but the runtime is unreachable → **falls back to inline** rather than
+  failing the run, and logs why.
+
+Inline is the default deliberately: WDK needs its own runtime (`next dev` with
+the plugin, or a Vercel deployment), and an app that only works in production is
+the wrong way round for a codebase being handed over. **Turn the flag on once
+deployed**, and confirm the context-research agent — the long one — completes.
+
+The human review pause is NOT modelled as a workflow hook. It already lives in
+the database: the run finishes, its assets are `pending`, and the admin console
+resumes the process days later across deploys. Modelling it twice would give two
+sources of truth that can disagree.
+
+Re-runs stay inline: they carry the previous run's context, which would have to
+be threaded across the workflow boundary for no current benefit.
 
 ### GitHub App
 
@@ -194,9 +212,15 @@ responses matter and are all handled as "not counted" rather than zero:
 | `422` | Repository too large for GitHub to compute at all | No, ever |
 | `404` / `403` | Private or gone / rate limited | Only for the rate limit |
 
-**Not implemented:** PRD §5.3.1 asks for research documents with *verifiable,
-reachable citations* (a URL-check pass). The research agent does not do web
-research or citation checking yet — that arrives with the real AI provider.
+**Citation checking is implemented** (`agents/citations.ts`): every link in a
+research document is extracted and checked, results go to the run log, and a
+note naming any dead or unverifiable link is appended to the document. It
+reports and never rewrites. A 403/timeout/rate-limit is "unverified", not
+"dead" — only a definite 4xx/5xx or a DNS failure counts as a failure.
+
+**Still not implemented:** the research agent does not do live web *research* —
+it reasons from the intake. Citations are therefore only as good as the model's
+recall until a search tool is wired in.
 
 ### AI model access
 
@@ -268,9 +292,10 @@ Set `RR_ADMIN_DEV_OPEN="true"` in `.env` to skip sign-in locally.
 - [ ] Fill real credentials for AI Gateway, Resend, Vercel Blob, GitHub App.
 - [ ] **Smoke-test the AI Gateway provider** with a real key — it has only ever
       run against the dev provider.
-- [ ] Wire durable Vercel Workflows before any long-running agent ships.
-- [ ] **Implement the Vercel Blob provider** in `integrations/blob.ts` (it throws
-      today) and confirm uploads never fall back to local disk in production.
+- [ ] **Smoke-test the Vercel Blob provider** with a real `BLOB_READ_WRITE_TOKEN`
+      and confirm uploads never fall back to local disk in production.
+- [ ] Set `RR_WORKFLOWS_ENABLED="true"` once deployed, and confirm the
+      context-research agent completes durably.
 - [ ] Set `RR_MAGIC_LINK_SECRET` — magic-link hashing fails fast without it in
       production, by design.
 - [ ] Decide on malware scanning for sponsor uploads, or accept the documented

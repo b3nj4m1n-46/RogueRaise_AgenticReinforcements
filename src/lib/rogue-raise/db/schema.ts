@@ -306,7 +306,14 @@ export const repoReviewComments = rogueRaise.table("repo_review_comments", {
     .references(() => events.id),
   /** Repo-relative path, or null for a comment on the repo as a whole. */
   filePath: text("file_path"),
-  /** Who left it — `wr_admin` or `stakeholder` until real identities exist. */
+  /**
+   * The draft this comment is about, for stakeholder review of generated assets
+   * (PRD §11.2 `admin_and_stakeholders`). Null for repo/file comments — the two
+   * kinds share this table because they are the same thing at different stages,
+   * but an asset id must never be smuggled through `file_path`.
+   */
+  assetId: uuid("asset_id"),
+  /** Who left it — `wr_admin` or `stakeholder`. */
   authorRole: text("author_role").notNull(),
   authorLabel: text("author_label"),
   body: text("body").notNull(),

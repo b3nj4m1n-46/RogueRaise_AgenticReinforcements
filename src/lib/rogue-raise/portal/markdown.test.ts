@@ -34,6 +34,39 @@ describe("parseInline", () => {
   });
 });
 
+describe("parseInline — links", () => {
+  it("reads a markdown link", () => {
+    expect(parseInline("See [the count](https://example.org/pit) for detail.")).toEqual([
+      { kind: "text", text: "See " },
+      { kind: "link", text: "the count", href: "https://example.org/pit" },
+      { kind: "text", text: " for detail." },
+    ]);
+  });
+
+  it("falls back to the URL when the label is empty", () => {
+    // An anchor with no text is invisible; showing the URL beats showing nothing.
+    expect(parseInline("[](https://example.org/x)")).toEqual([
+      { kind: "link", text: "https://example.org/x", href: "https://example.org/x" },
+    ]);
+  });
+
+  it("does not treat a non-http link as one", () => {
+    // Keeps `javascript:` and friends out of an href by construction.
+    const parts = parseInline("[click](javascript:alert(1))");
+    expect(parts.every((p) => p.kind !== "link")).toBe(true);
+  });
+
+  it("reads several links in one line", () => {
+    const parts = parseInline("[a](https://a.example) and [b](https://b.example)");
+    expect(parts.filter((p) => p.kind === "link")).toHaveLength(2);
+  });
+
+  it("keeps bold working alongside links", () => {
+    const parts = parseInline("**Four** systems, per [the report](https://x.example)");
+    expect(parts.map((p) => p.kind)).toEqual(["bold", "text", "link"]);
+  });
+});
+
 describe("parseMarkdown", () => {
   it("reads headings at their level", () => {
     const blocks = parseMarkdown("# Title\n\n## Section\n\n### Sub");
@@ -91,11 +124,12 @@ describe("parseMarkdown", () => {
     const blocks = parseMarkdown(document);
     const headings = blocks.filter((b) => b.kind === "heading");
     expect(headings).toHaveLength(3);
-    // No stray asterisks survive into the rendered text.
+    // No stray asterisks or bracket syntax survive into the rendered text.
     const text = blocks
       .flatMap((b) => b.content.map((c) => c.text))
       .join(" ");
     expect(text).not.toContain("*");
     expect(text).not.toContain("_");
+    expect(text).not.toContain("](");
   });
 });

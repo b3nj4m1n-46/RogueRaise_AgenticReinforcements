@@ -8,24 +8,36 @@
  * bug in the product.
  *
  * This handles exactly what our own agents emit — ATX headings, bold, italic,
- * and blank-line-separated paragraphs — and passes anything else through as
- * text. It is not a Markdown implementation and must not grow into one: if a
- * document ever needs tables, lists, or links, that is the moment to take a
- * real dependency rather than to extend this.
+ * links, and blank-line-separated paragraphs — and passes anything else through
+ * as text.
+ *
+ * **Links were added deliberately, after the line was first drawn without
+ * them.** Research documents are made of citations; rendering
+ * `[label](url)` as literal brackets in front of the person who supplied the
+ * data is the failure this renderer exists to prevent. A link is one regex and
+ * one node type, and taking a full Markdown dependency to get it would mean
+ * inheriting an HTML-passthrough surface for *agent-generated* content, which
+ * is a strictly worse trade.
+ *
+ * That is where the line now is. Tables and lists are still out: they are
+ * genuinely more parser than this should be, and no agent emits them today.
  */
 
 export type Inline =
   | { kind: "text"; text: string }
   | { kind: "bold"; text: string }
-  | { kind: "italic"; text: string };
+  | { kind: "italic"; text: string }
+  | { kind: "link"; text: string; href: string };
 
 export type Block =
   | { kind: "heading"; level: 1 | 2 | 3; content: Inline[] }
   | { kind: "paragraph"; content: Inline[] };
 
 const HEADING = /^(#{1,3})\s+(.*)$/;
-// Bold before italic, so `**x**` isn't read as an empty italic pair.
-const INLINE = /(\*\*[^*]+\*\*|_[^_]+_)/g;
+// Links first (their label can contain emphasis markers), then bold before
+// italic so `**x**` isn't read as an empty italic pair.
+const INLINE = /(\[[^\]]*\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|_[^_]+_)/g;
+const LINK_PARTS = /^\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)$/;
 
 export function parseInline(text: string): Inline[] {
   const parts: Inline[] = [];
@@ -37,7 +49,11 @@ export function parseInline(text: string): Inline[] {
       parts.push({ kind: "text", text: text.slice(lastIndex, index) });
     }
     const token = match[0];
-    if (token.startsWith("**")) {
+    const link = LINK_PARTS.exec(token);
+    if (link) {
+      // A link with no label shows its URL — better than an invisible anchor.
+      parts.push({ kind: "link", text: link[1] || link[2], href: link[2] });
+    } else if (token.startsWith("**")) {
       parts.push({ kind: "bold", text: token.slice(2, -2) });
     } else {
       parts.push({ kind: "italic", text: token.slice(1, -1) });

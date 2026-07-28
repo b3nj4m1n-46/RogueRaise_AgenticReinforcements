@@ -102,27 +102,97 @@ const localBlobAdapter: BlobAdapter = {
   },
 };
 
-const unwiredVercelBlobAdapter: BlobAdapter = {
+const VERCEL_REF_PREFIX = "vercel:";
+
+/**
+ * Vercel Blob.
+ *
+ * **Private by default** (PRD §12: "File uploads validated and stored private by
+ * default; only explicitly published assets are public"). `access: "private"` is
+ * the default here, and a caller has to ask for `"public"` explicitly — the
+ * opposite of the SDK's own default, deliberately.
+ *
+ * The stored ref is `vercel:<url>` rather than the bare URL, so this module can
+ * tell its own references apart from the local provider's and refuse to read one
+ * written by the other. A row written on a laptop must not silently resolve
+ * against production storage, or vice versa.
+ *
+ * ⚠️ This has never run against a real `BLOB_READ_WRITE_TOKEN`. It follows the
+ * documented `@vercel/blob` API and is typechecked; smoke-test it the first time
+ * the token exists. See HANDOFF.md.
+ */
+const vercelBlobAdapter: BlobAdapter = {
   provider: "vercel",
-  async put() {
-    throw new Error(
-      "Vercel Blob provider is not wired yet (BLOB_READ_WRITE_TOKEN is set). Install @vercel/blob and implement the provider in lib/rogue-raise/integrations/blob.ts — see HANDOFF.md.",
-    );
+
+  async put(input) {
+    assertSafeKey(input.key);
+    const { put } = await import("@vercel/blob");
+    // The SDK takes Buffer but not a bare Uint8Array; our contract allows both,
+    // and `Buffer.from` on a Buffer is a no-op view rather than a copy.
+    const body =
+      typeof input.body === "string" ? input.body : Buffer.from(input.body);
+    const result = await put(input.key, body, {
+      access: input.access === "public" ? "public" : "private",
+      contentType: input.contentType,
+      // Keys are already unique and meaningful (event id + attachment id); a
+      // random suffix would make a ref impossible to trace back to its row.
+      addRandomSuffix: false,
+    });
+    return { ref: `${VERCEL_REF_PREFIX}${result.url}` };
   },
-  async get() {
-    throw new Error("Vercel Blob provider is not wired yet.");
+
+  async get(ref) {
+    const url = parseVercelRef(ref);
+    // `fetch` rather than the SDK's `get`: a private blob's URL is already
+    // authorized by the token embedded in it, and this keeps the read path to
+    // one round trip.
+    const response = await fetch(url, {
+      headers: { authorization: `Bearer ${requireBlobToken()}` },
+    });
+    if (!response.ok) {
+      throw new Error(`Blob read failed (${response.status}).`);
+    }
+    return { body: Buffer.from(await response.arrayBuffer()) };
   },
-  async del() {
-    throw new Error("Vercel Blob provider is not wired yet.");
+
+  async del(ref) {
+    const url = parseVercelRef(ref);
+    const { del } = await import("@vercel/blob");
+    try {
+      await del(url);
+    } catch (err) {
+      // Deleting something already gone is the desired end state, not a fault —
+      // this runs when a sponsor removes an attachment, and failing there would
+      // strand a row pointing at nothing.
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/not\s*found/i.test(message)) throw err;
+    }
   },
 };
+
+function requireBlobToken(): string {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) throw new Error("BLOB_READ_WRITE_TOKEN is not set.");
+  return token;
+}
+
+function parseVercelRef(ref: string): string {
+  if (!ref.startsWith(VERCEL_REF_PREFIX)) {
+    // A local ref reaching the Vercel provider means the database and the
+    // environment disagree about where files live. Say so rather than 404ing.
+    throw new Error(
+      "Not a Vercel blob reference — this row was written by a different storage provider.",
+    );
+  }
+  return ref.slice(VERCEL_REF_PREFIX.length);
+}
 
 let adapter: BlobAdapter | undefined;
 
 export function getBlobAdapter(): BlobAdapter {
   if (adapter) return adapter;
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    adapter = unwiredVercelBlobAdapter;
+    adapter = vercelBlobAdapter;
   } else if (process.env.NODE_ENV === "production") {
     // Never silently write user uploads to an ephemeral production filesystem.
     throw new Error(

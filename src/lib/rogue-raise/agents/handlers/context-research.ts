@@ -21,6 +21,13 @@ import {
   type DocumentPrompt,
   type EventBrief,
 } from "./context-research-prompts";
+import {
+  buildCitationNote,
+  checkCitations,
+  describeReport,
+  extractCitations,
+  summarize,
+} from "../citations";
 
 /** Each document, in the order a builder would read them. */
 const DOCUMENTS: {
@@ -105,10 +112,27 @@ export const contextResearchHandler: AgentHandler = async (ctx) => {
     const result = await ctx.ai.generate({ system: steer, prompt, maxOutputTokens: 8000 });
     costTokens += result.usage.totalTokens;
 
+    // PRD §5.3.1 wants research documents with verifiable, REACHABLE citations.
+    // A model asked to research a county's data will produce plausible URLs for
+    // reports that don't exist, and a volunteer who follows a dead one on a
+    // Saturday morning concludes the whole document is untrustworthy.
+    //
+    // The check reports; it never rewrites. A note naming the dead links is
+    // appended so the record travels with the document into the repo, and the
+    // reviewer decides whether to re-run, fix the source, or drop the claim.
+    let body = result.text;
+    const citations = extractCitations(body);
+    if (citations.length > 0) {
+      const report = summarize(await checkCitations(citations));
+      ctx.log(`${doc.title}: ${describeReport(report)}`);
+      const note = buildCitationNote(report);
+      if (note) body += note;
+    }
+
     assets.push({
       type: doc.assetType,
       title: `${doc.title} — ${brief.organizationName}`,
-      body: result.text,
+      body,
     });
   }
 
