@@ -76,12 +76,18 @@ export default async function AdminEventPage({
 
   return (
     <main className="mx-auto flex min-h-full max-w-3xl flex-col gap-10 px-6 py-16">
-      <div>
+      <div className="flex flex-wrap items-center gap-4">
         <Link
           href="/admin/events"
           className="text-sm font-medium text-ink underline underline-offset-4"
         >
           ← All events
+        </Link>
+        <Link
+          href={`/admin/events/${id}/agents`}
+          className="text-sm font-medium text-ink underline underline-offset-4"
+        >
+          Agents &amp; drafts →
         </Link>
       </div>
 

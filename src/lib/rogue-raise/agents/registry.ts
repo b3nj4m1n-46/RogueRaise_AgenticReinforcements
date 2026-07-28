@@ -1,11 +1,12 @@
 /**
  * Agent handler registry.
  *
- * A handler is a pure-ish function: it receives everything it needs (the event
- * snapshot, its inputs, a model adapter, a log sink) and returns draft assets as
- * plain data. **Handlers never touch the database.** All persistence lives in
- * `runs.ts`, so run auditing, asset versioning, and the secret scan can't be
- * bypassed by a handler that forgets to call something.
+ * A handler receives what it needs (the event snapshot, its inputs, a model
+ * adapter, a log sink) and returns draft assets as plain data. It may READ —
+ * an agent that can't see the intake is useless — but **a handler never
+ * writes.** All persistence lives in `runs.ts`, so run auditing, asset
+ * versioning, and the secret scan can't be bypassed by a handler that forgets
+ * to call something.
  *
  * That constraint is what makes the AC "every generated asset is versioned and
  * attributable to its AgentRun" structurally true rather than a convention.
