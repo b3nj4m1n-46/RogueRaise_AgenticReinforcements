@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { count, eq } from "drizzle-orm";
+import { count, eq, notInArray } from "drizzle-orm";
 
 import { db } from "@/lib/rogue-raise/db";
-import { sponsorApplications } from "@/lib/rogue-raise/db/schema";
+import { events, sponsorApplications } from "@/lib/rogue-raise/db/schema";
 
 export const metadata = {
   title: "Admin · Rogue Raise",
@@ -18,6 +18,14 @@ export default async function AdminHomePage() {
     .from(sponsorApplications)
     .where(eq(sponsorApplications.status, "submitted"));
   const submittedCount = row?.value ?? 0;
+
+  // "In flight" = everything that still needs staff attention: not rejected,
+  // not finished, not archived.
+  const [eventRow] = await db
+    .select({ value: count() })
+    .from(events)
+    .where(notInArray(events.status, ["rejected", "completed", "archived"]));
+  const liveEventCount = eventRow?.value ?? 0;
 
   return (
     <main className="mx-auto flex min-h-full max-w-2xl flex-col justify-center gap-6 px-6 py-24">
@@ -44,6 +52,21 @@ export default async function AdminHomePage() {
           className="inline-flex min-h-9 items-center text-sm font-medium text-ink underline underline-offset-4 hover:text-primary"
         >
           Review queue →
+        </Link>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="inline-flex items-center gap-2 rounded-full border border-wr-olive-green px-4 py-2 text-sm font-medium text-ink">
+          Events in flight
+          <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-primary px-2 py-0.5 font-mono text-xs font-semibold text-primary-foreground">
+            {liveEventCount}
+          </span>
+        </span>
+        <Link
+          href="/admin/events"
+          className="inline-flex min-h-9 items-center text-sm font-medium text-ink underline underline-offset-4 hover:text-primary"
+        >
+          All events →
         </Link>
       </div>
     </main>

@@ -22,6 +22,8 @@ function stripCrlf(value: string): string {
 export interface IntakeCompleteEmailData {
   orgName: string;
   eventTitle: string;
+  /** Deep-links the notification straight at the event in the console. */
+  eventId: string;
   /** Human-readable weekend options, already formatted by `schedule.ts`. */
   weekendLabels: string[];
   judgeCount: number;
@@ -42,7 +44,7 @@ export function buildIntakeCompleteAdminEmail(
     /\/+$/,
     "",
   );
-  const consoleUrl = `${base}/admin/sponsors`;
+  const consoleUrl = `${base}/admin/events/${data.eventId}`;
 
   const weekends = data.weekendLabels.length
     ? data.weekendLabels.map((w) => `<li>${escapeHtml(w)}</li>`).join("\n")
@@ -54,7 +56,7 @@ export function buildIntakeCompleteAdminEmail(
     `<p><strong>Weekend options offered:</strong></p>`,
     `<ul>\n${weekends}\n</ul>`,
     `<p><strong>Also provided:</strong> ${data.judgeCount} judge(s), ${data.criteriaCount} evaluative criteria, ${data.attachmentCount} supporting file(s).</p>`,
-    `<p><a href="${escapeHtml(consoleUrl)}">Open the Rogue Raise console</a></p>`,
+    `<p><a href="${escapeHtml(consoleUrl)}">Review the intake in the console</a></p>`,
   ].join("\n");
 
   const text =
@@ -66,7 +68,7 @@ export function buildIntakeCompleteAdminEmail(
       : "  - None offered") +
     `\n\nAlso provided: ${data.judgeCount} judge(s), ${data.criteriaCount} evaluative criteria, ` +
     `${data.attachmentCount} supporting file(s).\n\n` +
-    `Open the console: ${consoleUrl}`;
+    `Review the intake: ${consoleUrl}`;
 
   return {
     to,

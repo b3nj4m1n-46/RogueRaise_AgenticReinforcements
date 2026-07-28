@@ -393,6 +393,7 @@ async function notifyAdminIntakeComplete(
   const message = buildIntakeCompleteAdminEmail({
     orgName: event.orgName,
     eventTitle: event.title,
+    eventId,
     weekendLabels: weekends.map((w) => formatWeekendLabel(w.fridayKickoffAt)),
     judgeCount: facts.judgeCount,
     criteriaCount: facts.criteriaCount,
