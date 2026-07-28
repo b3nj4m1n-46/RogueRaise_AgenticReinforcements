@@ -51,6 +51,25 @@ Token reissue/resend (if the 14-day window lapses, or the approval email failed
 to send) is still unbuilt; it needs an admin surface and is owned by the admin
 intake-review story.
 
+### Magic-link roles and TTLs
+
+Every external role uses the same hashed-token machinery via
+`src/lib/rogue-raise/access/redeem.ts`. The TTLs differ because the windows do:
+
+| Role | Redeemer | TTL | Notes |
+|---|---|---|---|
+| `sponsor_poc` | `intake/access.ts` | 14 days | Multi-use; the intake form is resumable |
+| `judge` | `judges/access.ts` | 30 days | Covers invitation → background form → scoring |
+| `participant` | `participants/access.ts` | 7 days | Minted for the submission window |
+| `stakeholder` | `portal/access.ts` | **365 days** | The portal is the deliverable, not a step — a stakeholder returning in three months to check on a project they adopted is the model working |
+
+**The stakeholder role has a second gate:** `stakeholders.can_access_portal`. A
+valid token is refused until an admin opens the portal, so "your portal isn't
+open yet" is a distinct, honest message rather than an indistinguishable
+"invalid link". Closing the portal for a stakeholder clears the flag **and**
+revokes their tokens — clearing the flag alone would leave live links that merely
+fail a second check.
+
 ## Portability seams
 
 Everything WR-specific is isolated behind a small number of seams — swap these,
@@ -127,6 +146,18 @@ creation); install it on the org; then set `RR_GITHUB_APP_ID`,
 Repos are created **private** and made public only when the repo review is
 approved. Every file is scanned for credential material before the push, and a
 hit aborts the whole provisioning rather than pushing a partial tree.
+
+`fetchRepoStats` (used by the Phase 4 categorizer) reads
+`GET /repos/{owner}/{repo}/stats/code_frequency` for line counts and
+`/languages` for the breakdown. Both are also used unauthenticated when no App
+credentials are configured, at a much lower rate limit. Three live-observed
+responses matter and are all handled as "not counted" rather than zero:
+
+| Status | Meaning | Does re-running help? |
+|---|---|---|
+| `202` | GitHub is still computing the statistics | **Yes** — verified: a repo that returned 202 counted 735,495 lines on the next run |
+| `422` | Repository too large for GitHub to compute at all | No, ever |
+| `404` / `403` | Private or gone / rate limited | Only for the rate limit |
 
 **Not implemented:** PRD §5.3.1 asks for research documents with *verifiable,
 reachable citations* (a URL-check pass). The research agent does not do web

@@ -87,6 +87,9 @@ export const assetType = rogueRaise.enum("asset_type", [
   "social_post",
   "landing_page_content",
   "faq",
+  // Phase 4: the categorizer's readable account of what got built. The numeric
+  // stats live on `submissions`; this is the prose that goes with them.
+  "submission_summary",
 ]);
 
 export const reviewStatus = rogueRaise.enum("review_status", [

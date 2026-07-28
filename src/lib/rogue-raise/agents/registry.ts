@@ -49,8 +49,25 @@ export interface DraftAsset {
   platform?: "instagram" | "facebook" | "x" | "reddit";
 }
 
+/**
+ * Statistics an agent computed about one submission (PRD §8.1).
+ *
+ * Handlers still never write — this is data handed back for `runs.ts` to
+ * persist in the same transaction as the run's outcome, so the single-writer
+ * rule above holds for numbers exactly as it does for documents.
+ */
+export interface SubmissionStat {
+  submissionId: string;
+  /** null means "we couldn't count", which is not the same as zero. */
+  linesOfCode: number | null;
+  category: string | null;
+  categorySummary: string | null;
+}
+
 export interface AgentResult {
   assets: DraftAsset[];
+  /** Numbers to write onto `submissions`; see `SubmissionStat`. */
+  submissionStats?: SubmissionStat[];
   /** Tokens the handler spent, if it tracked them itself. */
   costTokens?: number;
   /** One line for the run log — what it decided, not what it wrote. */

@@ -36,7 +36,8 @@ export type AssetType =
   | "outreach_template"
   | "social_post"
   | "landing_page_content"
-  | "faq";
+  | "faq"
+  | "submission_summary";
 
 /**
  * Who must approve before the output can be used. `auto` means there is nothing
@@ -147,12 +148,15 @@ export const AGENT_CATALOG: Record<AgentType, AgentDefinition> = {
     type: "submission_categorizer",
     label: "Submission categorizer & LOC",
     description:
-      "Categorizes what got built and totals lines of code once submissions close.",
+      "Counts lines of code and categorizes what got built, then drafts the account of the weekend that the sponsoring organization reads in their portal.",
     phase: "4",
     triggerStatuses: ["judging", "completed"],
-    // Writes statistics onto submissions rather than producing a document.
-    assetTypes: [],
-    reviewGate: "auto",
+    // Writes statistics onto `submissions` AND a readable account for the
+    // sponsor. The numbers are facts about repositories and apply themselves;
+    // the prose is admin-reviewed like every other document that reaches
+    // someone outside White Rabbit, which is why this gate is not `auto`.
+    assetTypes: ["submission_summary"],
+    reviewGate: "admin",
     priority: "must",
   },
 };

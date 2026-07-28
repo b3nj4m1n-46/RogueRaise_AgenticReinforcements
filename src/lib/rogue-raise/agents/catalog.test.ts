@@ -41,6 +41,7 @@ const ASSET_TYPES = [
   "social_post",
   "landing_page_content",
   "faq",
+  "submission_summary",
 ];
 
 describe("AGENT_CATALOG", () => {
@@ -80,8 +81,9 @@ describe("AGENT_CATALOG", () => {
   });
 
   it("gives every reviewable agent something to review", () => {
-    // An `auto` agent (the categorizer) writes statistics, not documents — it is
-    // the only one allowed to produce no assets.
+    // `auto` would mean "nothing here reaches anyone outside White Rabbit".
+    // No agent currently qualifies: even the categorizer, whose numbers apply
+    // themselves, drafts prose the sponsor reads.
     for (const definition of Object.values(AGENT_CATALOG)) {
       if (definition.reviewGate === "auto") continue;
       expect(definition.assetTypes.length).toBeGreaterThan(0);

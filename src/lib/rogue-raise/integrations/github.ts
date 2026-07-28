@@ -333,6 +333,14 @@ export function getGithubAdapter(): GithubAdapter {
  * participant's. So: `true` / `false` when we actually know, `"unknown"` when
  * we couldn't find out — and the caller lets `"unknown"` through.
  */
+/** `https://github.com/owner/repo(.git)` → its parts, or null. */
+function parseRepoUrl(url: string): { owner: string; repo: string } | null {
+  const match = /github\.com\/([^/\s]+)\/([^/\s?#]+?)(?:\.git)?\/?$/i.exec(
+    url.trim(),
+  );
+  return match ? { owner: match[1], repo: match[2] } : null;
+}
+
 export async function checkGithubUser(
   username: string,
 ): Promise<true | false | "unknown"> {
@@ -374,9 +382,9 @@ export async function checkGithubUser(
 export async function checkGithubRepo(
   url: string,
 ): Promise<true | false | "unknown"> {
-  const match = /github\.com\/([^/\s]+)\/([^/\s?#]+?)(?:\.git)?\/?$/i.exec(url.trim());
-  if (!match) return false;
-  const [, owner, repo] = match;
+  const parsed = parseRepoUrl(url);
+  if (!parsed) return false;
+  const { owner, repo } = parsed;
 
   const config = readAppConfig();
   try {
@@ -396,6 +404,107 @@ export async function checkGithubRepo(
     return "unknown";
   } catch {
     return "unknown";
+  }
+}
+
+/**
+ * Repository statistics for the handoff dashboard (PRD §8.1).
+ *
+ * **What "lines of code" actually means here.** GitHub has no endpoint that
+ * returns a line count. `stats/code_frequency` returns weekly additions and
+ * deletions for the repo's whole history, and summing them gives net lines
+ * currently in the repository — which is the closest honest answer, and it is
+ * what the portal must label it as. It counts everything committed, including
+ * vendored files and generated lock files, so it is a scale indicator rather
+ * than a measure of effort. The portal says so rather than implying otherwise.
+ *
+ * Every field is independently nullable, and the reasons are all real ones
+ * observed against the live API:
+ *
+ *   - **202** — GitHub is computing the statistics; asking again later works.
+ *   - **422** — the repository is too large for GitHub to compute at all. This
+ *     one never resolves, however many times it is re-run.
+ *   - **404** — private, or gone. Indistinguishable from here.
+ *   - **403** — rate limited.
+ *
+ * A missing number is shown as "not counted", never as zero: zero would tell a
+ * sponsor a team wrote nothing.
+ */
+export interface RepoStats {
+  /** Net lines across the repo's history, or null when GitHub wouldn't say. */
+  linesOfCode: number | null;
+  /** Bytes per language, GitHub's own breakdown, or null. */
+  languages: Record<string, number> | null;
+}
+
+export async function fetchRepoStats(url: string): Promise<RepoStats> {
+  const parsed = parseRepoUrl(url);
+  if (!parsed) return { linesOfCode: null, languages: null };
+  const { owner, repo } = parsed;
+
+  const config = readAppConfig();
+  const headers: Record<string, string> = {
+    accept: "application/vnd.github+json",
+    "x-github-api-version": "2022-11-28",
+  };
+  if (config) {
+    try {
+      headers.authorization = `Bearer ${await installationToken(config)}`;
+    } catch {
+      // Fall through unauthenticated — a lower rate limit still beats nothing.
+    }
+  }
+
+  const base = `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  // Stats generation is slow on GitHub's side, so this timeout is longer than
+  // the existence checks'.
+  const options = { headers, signal: AbortSignal.timeout(10_000) };
+
+  const [frequency, languages] = await Promise.allSettled([
+    fetch(`${base}/stats/code_frequency`, options),
+    fetch(`${base}/languages`, options),
+  ]);
+
+  return {
+    linesOfCode: await readLinesOfCode(frequency),
+    languages: await readLanguages(languages),
+  };
+}
+
+async function readLinesOfCode(
+  result: PromiseSettledResult<Response>,
+): Promise<number | null> {
+  // 202 arrives "ok" with an empty body, so the array check below is doing real
+  // work rather than being defensive noise.
+  if (result.status === "rejected" || !result.value.ok) return null;
+  try {
+    const weeks = await result.value.json();
+    if (!Array.isArray(weeks) || weeks.length === 0) return null;
+    let total = 0;
+    for (const week of weeks) {
+      // [unixTimestamp, additions, deletions] — deletions arrive negative.
+      if (!Array.isArray(week) || week.length < 3) continue;
+      total += Number(week[1] ?? 0) + Number(week[2] ?? 0);
+    }
+    return Number.isFinite(total) ? Math.max(0, Math.round(total)) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readLanguages(
+  result: PromiseSettledResult<Response>,
+): Promise<Record<string, number> | null> {
+  if (result.status === "rejected" || !result.value.ok) return null;
+  try {
+    const body = await result.value.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+    const entries = Object.entries(body).filter(
+      ([, bytes]) => typeof bytes === "number" && bytes > 0,
+    ) as [string, number][];
+    return entries.length > 0 ? Object.fromEntries(entries) : null;
+  } catch {
+    return null;
   }
 }
 

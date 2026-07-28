@@ -125,6 +125,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
       logs: logLines.join("\n"),
       costTokens,
       assets: result.assets,
+      submissionStats: result.submissionStats,
     });
   } catch (err) {
     // A rejected asset (undeclared type, or credential material) fails the run —

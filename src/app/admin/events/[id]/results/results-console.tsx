@@ -24,6 +24,7 @@ import {
   openJudging,
   sendScoringLinksAction,
 } from "@/lib/rogue-raise/judging/actions";
+import { openPortalAction } from "@/lib/rogue-raise/portal/admin-actions";
 import type { ResultsView } from "@/lib/rogue-raise/judging/queries";
 import { describeMethod, rankByCriterion } from "@/lib/rogue-raise/judging/scoring";
 import { cn } from "@/lib/utils";
@@ -133,7 +134,33 @@ export function ResultsConsole({ results }: { results: ResultsView }) {
               </Button>
             </>
           ) : null}
+          {event.status === "completed" || event.status === "archived" ? (
+            <Button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  setMessage(null);
+                  const outcome = await openPortalAction(event.id);
+                  setMessage(
+                    outcome.ok
+                      ? { kind: "ok", text: outcome.summary ?? "Portal opened." }
+                      : { kind: "error", text: outcome.error ?? "That didn't work." },
+                  );
+                })
+              }
+              className="h-11"
+            >
+              Open the handoff portal
+            </Button>
+          ) : null}
         </div>
+        {event.status === "completed" || event.status === "archived" ? (
+          <p className="max-w-prose text-sm text-ink/70">
+            Emails every stakeholder their own portal link and lets them in.
+            Announce the awards first — only announced winners appear there.
+          </p>
+        ) : null}
       </section>
 
       {/* --- Judge progress ---------------------------------------------- */}

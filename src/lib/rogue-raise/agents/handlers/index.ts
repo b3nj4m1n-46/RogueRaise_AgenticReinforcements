@@ -15,6 +15,7 @@ import {
   outreachHandler,
   socialMarketingHandler,
 } from "./marketing";
+import { submissionCategorizerHandler } from "./submission-categorizer";
 
 let registered = false;
 
@@ -27,5 +28,5 @@ export function registerAgentHandlers(): void {
   registerAgentHandler("tech_sponsor_press_outreach", outreachHandler);
   registerAgentHandler("social_marketing", socialMarketingHandler);
   registerAgentHandler("landing_page_content", landingPageHandler);
-  // M9: submission_categorizer
+  registerAgentHandler("submission_categorizer", submissionCategorizerHandler);
 }

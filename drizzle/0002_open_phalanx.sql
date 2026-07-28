@@ -1,0 +1,1 @@
+ALTER TYPE "rogue_raise"."asset_type" ADD VALUE 'submission_summary';

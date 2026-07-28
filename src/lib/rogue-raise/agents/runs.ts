@@ -17,7 +17,14 @@
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import { db } from "../db";
-import { agentRuns, auditLog, events, generatedAssets, organizations } from "../db/schema";
+import {
+  agentRuns,
+  auditLog,
+  events,
+  generatedAssets,
+  organizations,
+  submissions,
+} from "../db/schema";
 import {
   canTriggerAgent,
   describeTriggerStatuses,
@@ -25,7 +32,7 @@ import {
   producesAssetType,
   type AgentType,
 } from "./catalog";
-import type { AgentEventContext, DraftAsset } from "./registry";
+import type { AgentEventContext, DraftAsset, SubmissionStat } from "./registry";
 import { describeSecretFindings, findSecrets } from "./secrets";
 
 /** Audit actor for agent-driven changes; distinct from `wr-admin` and `public`. */
@@ -262,6 +269,7 @@ export interface FinishRunInput {
   costTokens: number;
   error?: string;
   assets?: DraftAsset[];
+  submissionStats?: SubmissionStat[];
   agentType: string;
 }
 
@@ -280,6 +288,27 @@ export async function finishRun(input: FinishRunInput): Promise<FinishedRun> {
       input.status === "succeeded" && input.assets?.length
         ? await writeAssets(tx, input.runId, input.eventId, input.agentType, input.assets)
         : [];
+
+    // Scoped to this event, so a stat naming another event's submission is
+    // ignored rather than trusted.
+    if (input.status === "succeeded" && input.submissionStats?.length) {
+      for (const stat of input.submissionStats) {
+        await tx
+          .update(submissions)
+          .set({
+            linesOfCode: stat.linesOfCode,
+            submissionCategory: stat.category,
+            categorySummary: stat.categorySummary,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(submissions.id, stat.submissionId),
+              eq(submissions.eventId, input.eventId),
+            ),
+          );
+      }
+    }
 
     const now = new Date();
     await tx
@@ -306,6 +335,7 @@ export async function finishRun(input: FinishRunInput): Promise<FinishedRun> {
         agentRunId: input.runId,
         agentType: input.agentType,
         assetCount: assetIds.length,
+        submissionStatCount: input.submissionStats?.length ?? 0,
         costTokens: input.costTokens,
       },
     });
