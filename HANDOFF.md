@@ -91,6 +91,32 @@ not feature code:
   JetBrains Mono) are vendored in `src/app/globals.css` + `src/app/layout.tsx`.
   Confirm exact hex against the live site before launch.
 
+### ⚠️ Agent layer: no durable workflow runtime yet
+
+PRD §3/§11 specifies long agent runs as **durable Vercel Workflows (WDK)** so
+they survive the function timeout, pause for human review, and resume. WDK
+cannot run outside Vercel, so `lib/rogue-raise/agents/execute.ts` ships the
+**inline** executor plus the record-keeping a durable one needs — every run is an
+`agent_runs` row with inputs, logs, cost, and timestamps, and an interrupted run
+is reclaimable rather than stuck. Until WDK is wired, **an agent is bounded by
+the request timeout** (~300s on Fluid Compute). `runAgent` is the seam: a durable
+adapter replaces the handler-invocation step; the gate and the persistence steps
+are unchanged.
+
+### AI model access
+
+All model calls go through `integrations/ai-gateway.ts` using `"provider/model"`
+strings via the Vercel AI Gateway. With `AI_GATEWAY_API_KEY` set it calls the
+gateway; without one it uses a **deterministic dev provider** so the whole agent
+pipeline runs locally with no credentials. That provider's output carries a
+visible `[PLACEHOLDER …]` banner and **production refuses it** rather than
+generating placeholder documents for a real event. Current model ids are
+`anthropic/claude-opus-5` (authoring) and `anthropic/claude-haiku-4-5` (fast).
+
+**The gateway provider has not been exercised against a live key** — it is
+typechecked against the AI SDK but unverified at runtime. Budget a smoke test
+when credentials are first configured.
+
 ## Environment variables
 
 See `.env.example` for the full list with inline notes. Groups: database, Better
@@ -123,6 +149,9 @@ npm run dev          # http://localhost:3000  ->  /rogue-raise
 - [ ] Point `DATABASE_URL` at the agreed Neon database/branch; run migrations.
 - [ ] Repoint the `auth` adapter at WR's Better Auth instance.
 - [ ] Fill real credentials for AI Gateway, Resend, Vercel Blob, GitHub App.
+- [ ] **Smoke-test the AI Gateway provider** with a real key — it has only ever
+      run against the dev provider.
+- [ ] Wire durable Vercel Workflows before any long-running agent ships.
 - [ ] **Implement the Vercel Blob provider** in `integrations/blob.ts` (it throws
       today) and confirm uploads never fall back to local disk in production.
 - [ ] Set `RR_MAGIC_LINK_SECRET` — magic-link hashing fails fast without it in
