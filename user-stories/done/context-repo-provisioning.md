@@ -3,7 +3,7 @@ metadata:
   created_at:   2026-07-27T21:55:00-07:00
   activated_at: 2026-07-27T21:55:00-07:00
   planned_at:   2026-07-27T22:00:00-07:00
-  finished_at:
+  finished_at:  2026-07-27T21:58:00-07:00
   updated_at:   2026-07-27T22:00:00-07:00
 -->
 
@@ -66,3 +66,52 @@ Unit: file-set assembly (every required path present; PRD splitting produces ≥
 
 - **The real GitHub provider cannot be verified without App credentials.** Its shape follows the documented REST API and it is typechecked, but every test exercises the dev provider. Stated in HANDOFF, not implied away.
 - Citation checking is not implemented; the PRD asks for it and this story does not deliver it.
+
+## Review
+
+**Date:** 2026-07-27 · **Commit reviewed:** cc754f6 · Self-review against ACs + browser verification · **Status: all 9 ACs met; 1 defect found and fixed**
+
+### Acceptance criteria
+
+| # | AC | Verdict |
+|---|----|---------|
+| 1 | GitHub App seam implemented; local dev provider; production refuses dev | ✅ App path typechecked (unverified against real credentials — stated); local provider exercised by every test and in the browser |
+| 2 | PRD §5.3.1 file set assembled | ✅ 14 files written and inspected on disk |
+| 3 | Only approved assets pushed; blockers named | ✅ integration test + the console lists blockers before offering the button |
+| 4 | No secret committed; a hit aborts the whole push | ✅ test asserts nothing is written and the message never repeats the secret |
+| 5 | `ContextRepo` record with URL, branch, PR, visibility | ✅ |
+| 6 | Created private | ✅ |
+| 7 | `repo_generating` → `repo_review`, audited; failure restores status | ✅ audit rows verified; the restore path is exercised by the secret test |
+| 8 | Idempotent per event | ✅ second run updates, one row |
+| 9 | Console shows repo, PR, and blockers | ✅ browser |
+
+### Defect found and fixed
+
+**The PRD splitter shredded any document with `##` headings.** It treated every top-level heading as a PRD boundary, so a document whose headings were ordinary sections became one file per section — visible immediately in the browser as seven nonsense files (`01-instructions-given.md`, `02-context-the-agent-supplied.md`, …). It now splits only on an explicit `## PRD: <name>` marker that the prompt asks for, and keeps anything unmarked as a single file. A regression test pins the shredding case.
+
+The unit tests had missed it because every fixture *was* a well-formed PRD document. The browser ran it against real agent output, which wasn't.
+
+### Known gaps (deliberate)
+
+- **The App provider has never authenticated for real.** Its shape follows the documented REST API; every test uses the local provider. HANDOFF carries a smoke-test item and the App-permission list.
+- **No citation checking.** PRD §5.3.1 asks for research documents with verifiable, reachable citations. The research agent does no web research yet, so there is nothing to check — deferred with the real AI provider and written into HANDOFF rather than quietly skipped.
+- **Repo review is the next story** — the repo is private and the PR is open, and nothing yet publishes it.
+
+## Learnings
+
+**What went well**
+
+- Making the file set a pure function meant the artifact participants actually read is fully asserted — required paths, the sponsor's own words, the credentials warning, the `.gitignore` — without a network or a database.
+- Showing blockers *before* the button turned the review gate from an obstacle into information. The console tells a staff member what needs a decision instead of failing when they act.
+- Restoring the previous status on failure took three lines and removes an entire class of "stuck in `repo_generating`" support question. That pattern has now paid off three times (agent runs, intake completion, provisioning).
+- Deciding provisioning is *not* an `AgentRun` kept the agent tables honest: they describe model work, and nothing in them is a fake run with no model call.
+
+**What was surprising**
+
+- The dev providers keep finding real bugs by being *unlike* test fixtures. The AI dev provider's echoed prompt was the input that exposed the splitter — a canned "Lorem ipsum" fake would have sailed through.
+- Splitting on structure the model was merely *expected* to produce is a bad contract. Splitting on a marker the prompt explicitly demands, and degrading to one file when it's absent, is the version that can't produce nonsense.
+
+**Do differently next time**
+
+- When code parses model output, write the "the model didn't follow the format" test first. That is the normal case, not the edge case.
+- Carry-forwards for **repo review (§5.3.2)**: per-file approve/edit/reject with comment threads; feedback re-triggers the research agent as a new `AgentRun`; on approval flip visibility to public (`setVisibility` is already implemented) and move to `repo_approved`; and the PRD also asks for a **stakeholder-facing** review view, which is the same gap the asset review gate already has — worth solving once, for both.
