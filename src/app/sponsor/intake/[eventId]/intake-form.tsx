@@ -145,7 +145,8 @@ function Section({
     <section
       id={id}
       aria-labelledby={`${id}-heading`}
-      className="flex flex-col gap-5 scroll-mt-6"
+      // `scroll-mt` clears the sticky save bar when a progress link jumps here.
+      className="flex flex-col gap-5 scroll-mt-28"
     >
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">

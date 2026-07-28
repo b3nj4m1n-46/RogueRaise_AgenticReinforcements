@@ -35,7 +35,7 @@ This is built as a **standalone Next.js app now, to be merged into WR's existing
 - **AI agents** via the **Vercel AI SDK** through the **AI Gateway**, using `"provider/model"` strings. Default to the latest, most capable Claude models for authoring/research (e.g. `anthropic/claude-opus-4-8`) and a faster tier for classification/categorization.
 - **Email** via **Resend** (templated + AI-drafted). All bulk sends go through a queue and must be **idempotent**.
 - **GitHub App** (not a PAT) with permission to create repos in the WR org, push commits, open PRs. Used by the repo-provisioning agent and for LOC/category stats.
-- **Validation:** server actions validated with **zod** (share client/server schemas).
+- **Validation:** server actions validated with **zod** (share client/server schemas). **zod v4 does not short-circuit a field's checks** — a `.refine()` predicate still runs after an earlier `.regex()`/`.min()` on the same field has failed. Every predicate passed to `.refine()` must therefore be **total**: return `false` for malformed input, never throw. A throwing helper that is perfectly correct on its own (e.g. a date parser) will take down the whole form the moment a user opens an empty row (see `intake/schedule.ts` `isFridayDate`).
 - **`"use server"` modules may export ONLY async functions** (Next 16 enforces this at build/runtime). Constants, initial-state objects, and helpers belong in a plain sibling module (see `src/lib/rogue-raise/sponsors/form-state.ts`, `admin-decision-state.ts`). Type-only exports are fine.
 
 ## Data Model (PRD §4, Appendix A)
