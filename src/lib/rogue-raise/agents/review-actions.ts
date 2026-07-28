@@ -19,7 +19,7 @@
  * AUTH: `/admin/*` is env-gated dev-open (src/middleware.ts); the audit actor is
  * still the `wr-admin` placeholder. See HANDOFF.md.
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -145,6 +145,7 @@ export async function reviewAssetAction(
           id: generatedAssets.id,
           eventId: generatedAssets.eventId,
           type: generatedAssets.type,
+          platform: generatedAssets.platform,
           version: generatedAssets.version,
           reviewStatus: generatedAssets.reviewStatus,
         })
@@ -154,6 +155,9 @@ export async function reviewAssetAction(
         .limit(1);
       if (!asset) return { kind: "not_found" as const };
 
+      // Keyed on (type, platform), matching the version counter — otherwise
+      // approving the Instagram post would be refused as superseded by the
+      // Reddit one.
       const [latest] = await tx
         .select({ version: generatedAssets.version })
         .from(generatedAssets)
@@ -161,6 +165,9 @@ export async function reviewAssetAction(
           and(
             eq(generatedAssets.eventId, asset.eventId),
             eq(generatedAssets.type, asset.type),
+            asset.platform
+              ? eq(generatedAssets.platform, asset.platform)
+              : isNull(generatedAssets.platform),
           ),
         )
         .orderBy(desc(generatedAssets.version))
@@ -282,6 +289,9 @@ export async function editAndApproveAssetAction(
           and(
             eq(generatedAssets.eventId, asset.eventId),
             eq(generatedAssets.type, asset.type),
+            asset.platform
+              ? eq(generatedAssets.platform, asset.platform)
+              : isNull(generatedAssets.platform),
           ),
         )
         .orderBy(desc(generatedAssets.version))

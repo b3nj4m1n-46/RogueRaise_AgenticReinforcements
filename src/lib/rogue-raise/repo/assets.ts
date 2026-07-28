@@ -19,7 +19,11 @@ export interface ApprovedAsset {
   reviewStatus: string;
 }
 
-/** Latest version of every asset type, whatever its review status. */
+/**
+ * Latest version of every asset type, whatever its review status. Repo assets
+ * never carry a platform (only social posts do), so keying on type alone is
+ * correct here.
+ */
 export async function latestAssetsByType(
   eventId: string,
 ): Promise<Map<string, ApprovedAsset>> {

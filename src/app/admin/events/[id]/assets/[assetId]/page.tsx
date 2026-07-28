@@ -38,7 +38,10 @@ export default async function AdminAssetPage({
   const siblings = await listAssets(id);
   if (!siblings.some((a) => a.id === asset.id)) notFound();
 
-  const sameType = siblings.filter((a) => a.type === asset.type);
+  // Same key as the version counter: (type, platform).
+  const sameType = siblings.filter(
+    (a) => a.type === asset.type && a.platform === asset.platform,
+  );
   const isLatest = sameType[0]?.id === asset.id;
   const others = sameType.filter((a) => a.id !== asset.id);
 

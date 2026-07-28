@@ -14,7 +14,7 @@
  *   - Every asset lands `review_status: "pending"`. Nothing auto-publishes.
  *   - Content is scanned for credential material and REFUSED if found.
  */
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { agentRuns, auditLog, events, generatedAssets, organizations } from "../db/schema";
@@ -208,8 +208,13 @@ export async function writeAssets(
       throw new SecretMaterialError(describeSecretFindings(findings));
     }
 
-    // Lock the existing versions of this (event, type) so the MAX we read is
-    // still the MAX when we insert.
+    // Version key is (event, type, platform). Platform matters because the
+    // social agent writes four posts of one type in a single run — without it
+    // they would read as four revisions of each other rather than one draft per
+    // platform. For every other asset type the platform is null and the key is
+    // effectively (event, type).
+    //
+    // Locked so the MAX we read is still the MAX when we insert.
     const [previous] = await tx
       .select({ version: generatedAssets.version })
       .from(generatedAssets)
@@ -217,6 +222,9 @@ export async function writeAssets(
         and(
           eq(generatedAssets.eventId, eventId),
           eq(generatedAssets.type, asset.type),
+          asset.platform
+            ? eq(generatedAssets.platform, asset.platform)
+            : isNull(generatedAssets.platform),
         ),
       )
       .orderBy(desc(generatedAssets.version))

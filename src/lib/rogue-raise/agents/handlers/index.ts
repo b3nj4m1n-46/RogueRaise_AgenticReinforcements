@@ -10,6 +10,11 @@ import { registerAgentHandler } from "../registry";
 import { contextResearchHandler } from "./context-research";
 import { judgeInvitationHandler } from "./judge-invitation";
 import { kickoffDeckHandler } from "./kickoff-deck";
+import {
+  landingPageHandler,
+  outreachHandler,
+  socialMarketingHandler,
+} from "./marketing";
 
 let registered = false;
 
@@ -19,6 +24,8 @@ export function registerAgentHandlers(): void {
   registerAgentHandler("context_research_repo", contextResearchHandler);
   registerAgentHandler("judge_invitation_email", judgeInvitationHandler);
   registerAgentHandler("kickoff_deck", kickoffDeckHandler);
-  // M6: tech_sponsor_press_outreach, social_marketing, landing_page_content
+  registerAgentHandler("tech_sponsor_press_outreach", outreachHandler);
+  registerAgentHandler("social_marketing", socialMarketingHandler);
+  registerAgentHandler("landing_page_content", landingPageHandler);
   // M9: submission_categorizer
 }

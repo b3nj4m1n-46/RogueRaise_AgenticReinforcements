@@ -29,6 +29,8 @@ export interface AgentRunView {
 export interface AssetView {
   id: string;
   type: string;
+  /** Only set for social posts. */
+  platform: string | null;
   title: string | null;
   body: string | null;
   blobUrl: string | null;
@@ -78,7 +80,7 @@ export async function listAssets(eventId: string): Promise<AssetView[]> {
     .select()
     .from(generatedAssets)
     .where(eq(generatedAssets.eventId, eventId))
-    .orderBy(generatedAssets.type, desc(generatedAssets.version));
+    .orderBy(generatedAssets.type, generatedAssets.platform, desc(generatedAssets.version));
 
   return rows.map(toAssetView);
 }
@@ -89,8 +91,15 @@ export async function listAssets(eventId: string): Promise<AssetView[]> {
  */
 export interface AssetGroup {
   type: string;
+  /** Set for social posts, which are grouped per platform. */
+  platform: string | null;
   latest: AssetView;
   olderVersions: AssetView[];
+}
+
+/** Groups share a key with the version counter: (type, platform). */
+function groupKey(asset: { type: string; platform: string | null }): string {
+  return asset.platform ? `${asset.type}:${asset.platform}` : asset.type;
 }
 
 export async function listAssetGroups(eventId: string): Promise<AssetGroup[]> {
@@ -98,10 +107,16 @@ export async function listAssetGroups(eventId: string): Promise<AssetGroup[]> {
   const groups = new Map<string, AssetGroup>();
 
   for (const asset of assets) {
-    const existing = groups.get(asset.type);
+    const key = groupKey(asset);
+    const existing = groups.get(key);
     if (!existing) {
-      // Ordered by version desc, so the first of each type is the latest.
-      groups.set(asset.type, { type: asset.type, latest: asset, olderVersions: [] });
+      // Ordered by version desc, so the first of each key is the latest.
+      groups.set(key, {
+        type: asset.type,
+        platform: asset.platform,
+        latest: asset,
+        olderVersions: [],
+      });
       continue;
     }
     existing.olderVersions.push(asset);
@@ -152,6 +167,7 @@ function toAssetView(row: AssetRow): AssetView {
   return {
     id: row.id,
     type: row.type,
+    platform: row.platform,
     title: row.title,
     body: row.body,
     blobUrl: row.blobUrl,

@@ -220,6 +220,31 @@ describe("runAgent — re-running", () => {
     expect(assets[0].agentRunId).not.toBe(assets[1].agentRunId);
   });
 
+  it("versions social posts per platform, not per type", async () => {
+    // The social agent writes four posts of ONE type in a single run. Without
+    // the platform in the version key they would read as four revisions of each
+    // other rather than one draft per platform.
+    // The social agent triggers at repo_approved, not intake_complete.
+    const eventId = await createEvent("repo_approved");
+    unregisterAgentHandler(AGENT);
+    registerAgentHandler("social_marketing", async () => ({
+      assets: [
+        { type: "social_post", body: "gram", platform: "instagram" as const },
+        { type: "social_post", body: "book", platform: "facebook" as const },
+      ],
+    }));
+
+    await runAgent({ eventId, type: "social_marketing" });
+    await runAgent({ eventId, type: "social_marketing" });
+    unregisterAgentHandler("social_marketing");
+
+    const posts = await assetsFor(eventId);
+    const versionsFor = (platform: string) =>
+      posts.filter((p) => p.platform === platform).map((p) => p.version);
+    expect(versionsFor("instagram")).toEqual([1, 2]);
+    expect(versionsFor("facebook")).toEqual([1, 2]);
+  });
+
   it("versions each asset type independently", async () => {
     const eventId = await createEvent();
     registerAgentHandler(AGENT, async () => ({
