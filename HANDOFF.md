@@ -212,15 +212,26 @@ responses matter and are all handled as "not counted" rather than zero:
 | `422` | Repository too large for GitHub to compute at all | No, ever |
 | `404` / `403` | Private or gone / rate limited | Only for the rate limit |
 
+**Live web research is implemented.** The two documents that make claims about
+the world — research notes and example PRDs — run with Anthropic's server-side
+web search attached (`integrations/ai-gateway.ts`, `webSearch`), and the pages
+the model actually read are logged on the run. The other two describe our own
+repo and process and deliberately do NOT search: letting a model look those up
+invites it to import someone else's conventions over the ones we just wrote
+down. **This has never run against a real `AI_GATEWAY_API_KEY`** — the tool
+revision (`webSearch_20260209`) is dated and model-specific, so if a model
+rejects it, check which revision it accepts rather than dropping the tool.
+
 **Citation checking is implemented** (`agents/citations.ts`): every link in a
 research document is extracted and checked, results go to the run log, and a
 note naming any dead or unverifiable link is appended to the document. It
 reports and never rewrites. A 403/timeout/rate-limit is "unverified", not
 "dead" — only a definite 4xx/5xx or a DNS failure counts as a failure.
 
-**Still not implemented:** the research agent does not do live web *research* —
-it reasons from the intake. Citations are therefore only as good as the model's
-recall until a search tool is wired in.
+The two together are the answer to §5.3.1: search makes the citations real,
+and the checker catches the ones that still aren't. Neither is a substitute for
+the review gate — a live URL that doesn't say what the document claims it says
+is still a human's job to catch.
 
 ### AI model access
 

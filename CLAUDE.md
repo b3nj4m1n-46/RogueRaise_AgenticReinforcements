@@ -20,9 +20,7 @@ never run against real credentials.** Each is implemented behind an adapter with
 a labelled dev provider that production refuses, so the risk is a wrong API
 detail rather than missing code — they are smoke-test items on the merge
 checklist. Beyond that: the durable-run path (`agents/dispatch.ts`) needs the
-WDK runtime to exercise, and the research agent reasons from the intake rather
-than doing live web research, so its citations are only as good as the model's
-recall.
+WDK runtime to exercise.
 
 ## What This Product Is
 

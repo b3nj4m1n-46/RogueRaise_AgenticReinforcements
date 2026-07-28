@@ -16,7 +16,8 @@
  * Production refuses the dev provider outright — an agent quietly producing
  * placeholder documents for a real event is the failure mode worth preventing.
  */
-import { generateText } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
+import { generateText, stepCountIs } from "ai";
 
 /**
  * Default models. Authoring/research gets the most capable Claude model;
@@ -33,6 +34,22 @@ export interface GenerateInput {
   system?: string;
   prompt: string;
   maxOutputTokens?: number;
+  /**
+   * Turn on **live web research** (PRD §5.3.1: research the sponsor's problem
+   * domain, with verifiable citations).
+   *
+   * This attaches Anthropic's *server-side* web search tool — the search runs on
+   * the provider's infrastructure, so there is no crawler to host and no API key
+   * beyond the gateway's. The model decides what to search for and returns the
+   * pages it used as `sources`, which is what makes the citations in the
+   * resulting document real rather than recalled.
+   *
+   * Without it, a research agent writes from the intake plus whatever it
+   * remembers — which produces confident, plausible, occasionally invented
+   * references. That is the specific failure this exists to prevent, and why
+   * `agents/citations.ts` checks the output regardless.
+   */
+  webSearch?: { maxUses?: number };
 }
 
 export interface GenerateUsage {
@@ -41,16 +58,49 @@ export interface GenerateUsage {
   totalTokens: number;
 }
 
+/** A page the model actually consulted, when web search was on. */
+export interface GenerateSource {
+  url: string;
+  title?: string;
+}
+
 export interface GenerateResult {
   text: string;
   usage: GenerateUsage;
   model: string;
   provider: "gateway" | "dev";
+  /** Empty unless `webSearch` was requested and the model used it. */
+  sources: GenerateSource[];
 }
 
 export interface AiAdapter {
   readonly provider: "gateway" | "dev";
   generate(input: GenerateInput): Promise<GenerateResult>;
+}
+
+/**
+ * Enough to check a few claims; low enough that a re-run isn't expensive.
+ * A research document that needed thirty searches is a sign the intake was thin,
+ * not that this should be raised.
+ */
+export const DEFAULT_WEB_SEARCH_USES = 8;
+
+/**
+ * Anthropic's server-side web search, taken from the provider package rather
+ * than hand-written as a `provider-defined` literal.
+ *
+ * The dated name is part of the tool's contract, not decoration — Anthropic
+ * ships revisions under new dates and older models only accept older ones. Using
+ * the factory means the SDK owns that mapping, and a model that rejects this
+ * revision produces a clear provider error rather than a malformed request.
+ *
+ * The model is still routed through the AI Gateway by its `"provider/model"`
+ * string; only the tool DEFINITION comes from this package.
+ */
+function webSearchTool(maxUses: number) {
+  return {
+    web_search: anthropic.tools.webSearch_20260209({ maxUses }),
+  };
 }
 
 const gatewayAdapter: AiAdapter = {
@@ -62,6 +112,17 @@ const gatewayAdapter: AiAdapter = {
       system: input.system,
       prompt: input.prompt,
       maxOutputTokens: input.maxOutputTokens,
+      ...(input.webSearch
+        ? {
+            tools: webSearchTool(
+              input.webSearch.maxUses ?? DEFAULT_WEB_SEARCH_USES,
+            ),
+            // The model searches, reads, and THEN writes, in one call. Without
+            // this the generation stops at the first tool result and returns no
+            // document at all.
+            stopWhen: stepCountIs(12),
+          }
+        : {}),
     });
     const inputTokens = result.usage?.inputTokens ?? 0;
     const outputTokens = result.usage?.outputTokens ?? 0;
@@ -74,6 +135,9 @@ const gatewayAdapter: AiAdapter = {
       },
       model,
       provider: "gateway",
+      sources: (result.sources ?? [])
+        .filter((source) => source.sourceType === "url")
+        .map((source) => ({ url: source.url, title: source.title })),
     };
   },
 };
@@ -97,6 +161,9 @@ const devAdapter: AiAdapter = {
       "",
       `Model that would have been used: ${model}`,
       "",
+      input.webSearch
+        ? "Web research was requested. The dev provider cannot search; a real draft would cite pages it actually read."
+        : "",
       input.system ? `## Instructions given\n\n${input.system.trim()}\n` : "",
       "## Context the agent supplied",
       "",
@@ -118,6 +185,9 @@ const devAdapter: AiAdapter = {
       },
       model,
       provider: "dev",
+      // Never fabricate a source: an empty list is the honest answer, and the
+      // handler's log says the search didn't happen.
+      sources: [],
     };
   },
 };

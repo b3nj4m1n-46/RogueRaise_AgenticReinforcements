@@ -34,26 +34,39 @@ const DOCUMENTS: {
   assetType: DraftAsset["type"];
   title: string;
   build: (brief: EventBrief) => DocumentPrompt;
+  /**
+   * Whether this document makes claims about the world (and so gets live web
+   * search), or about OUR repository and process (and so must not — searching
+   * would invite the model to import someone else's conventions over the ones
+   * we just wrote down).
+   */
+  researchesTheWorld: boolean;
 }[] = [
   {
     assetType: "research_doc",
     title: "Research notes",
     build: buildResearchPrompt,
+    researchesTheWorld: true,
   },
   {
     assetType: "stakeholder_preferences",
     title: "Stakeholder preferences",
     build: buildStakeholderPreferencesPrompt,
+    // Entirely from the intake — the sponsor told us this themselves.
+    researchesTheWorld: false,
   },
   {
     assetType: "example_prd",
     title: "Example PRD",
     build: buildExamplePrdPrompt,
+    // Grounded in what similar tools actually do, so it searches.
+    researchesTheWorld: true,
   },
   {
     assetType: "setup_agent_instructions",
     title: "Setup instructions",
     build: buildSetupInstructionsPrompt,
+    researchesTheWorld: false,
   },
 ];
 
@@ -109,8 +122,28 @@ export const contextResearchHandler: AgentHandler = async (ctx) => {
       : system;
 
     ctx.log(`Drafting ${doc.title}…`);
-    const result = await ctx.ai.generate({ system: steer, prompt, maxOutputTokens: 8000 });
+    // Live web research (PRD §5.3.1). Only the documents that make claims about
+    // the world get it: `setup_agent_instructions` describes OUR repo, and
+    // searching the web for that would invite the model to import someone
+    // else's conventions over the ones we just wrote down.
+    const result = await ctx.ai.generate({
+      system: steer,
+      prompt,
+      maxOutputTokens: 8000,
+      ...(doc.researchesTheWorld ? { webSearch: {} } : {}),
+    });
     costTokens += result.usage.totalTokens;
+
+    if (doc.researchesTheWorld) {
+      ctx.log(
+        result.sources.length > 0
+          ? `${doc.title}: read ${result.sources.length} page(s) — ${result.sources
+              .slice(0, 3)
+              .map((s) => s.url)
+              .join(", ")}${result.sources.length > 3 ? ", …" : ""}`
+          : `${doc.title}: no live sources. Either the model answered from recall, or search is unavailable — treat its references with more suspicion than usual.`,
+      );
+    }
 
     // PRD §5.3.1 wants research documents with verifiable, REACHABLE citations.
     // A model asked to research a county's data will produce plausible URLs for

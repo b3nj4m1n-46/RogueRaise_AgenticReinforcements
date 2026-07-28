@@ -93,6 +93,12 @@ export function buildResearchPrompt(brief: EventBrief): DocumentPrompt {
 
 You are writing RESEARCH NOTES for the builders — the document they read first, before touching code. Cover: what this organization actually does, who is affected by the problem, how work like this is usually done elsewhere, what data or systems are likely involved, and the traps a weekend team should expect. End with the open questions someone should ask the sponsor on Friday night.
 
+You have web search. USE IT — this document's value is that it is grounded in what is actually true of this place and this problem, not in what is generally true of problems like it. Look up the organization, the local numbers, and how comparable work has been done elsewhere.
+
+Cite as you go, inline, in the form [what it is](url), pointing at the page you actually read. Two rules, and they matter more than coverage:
+- **Never write a URL you did not open.** A plausible-looking dead link sends a volunteer hunting on a Saturday morning and costs you their trust in the whole document.
+- **If you could not find something, say so in the text.** "We could not find a current bed count for the county" is useful. Inventing one is not.
+
 Markdown. No preamble, no closing pleasantries.`,
     prompt: buildBriefBlock(brief),
   };
@@ -116,6 +122,8 @@ export function buildExamplePrdPrompt(brief: EventBrief): DocumentPrompt {
 You are writing EXAMPLE PRDs — two or three plausible, weekend-sized projects a team could take on, of clearly varying ambition (one a confident team could finish by Saturday lunch, one that would take the whole weekend). Each is written the way a good PRD reads: the problem, who it's for, what it does, what it explicitly does not do, and how you'd know it worked.
 
 Open with one line saying these are examples to spark ideas, not assignments. Then start each PRD with a heading of exactly the form \`## PRD: <short name>\` — they are split into separate files on that marker, so a PRD without it will be merged into the previous one. Use ordinary \`###\` headings for the sections inside each PRD. Scope each to what a small team can genuinely finish between Friday evening and Sunday afternoon.
+
+You have web search. Use it to ground these in tools that actually exist — if something close already exists and is free, say so and point at it rather than inviting a team to rebuild it. Cite inline as [what it is](url), and only ever link a page you actually opened.
 
 Markdown. No preamble.`,
     prompt: buildBriefBlock(brief),
