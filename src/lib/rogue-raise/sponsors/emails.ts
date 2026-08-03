@@ -116,6 +116,13 @@ export interface IntakeInviteEmailData {
   pocName: string;
   pocEmail: string;
   intakeUrl: string;
+  /**
+   * True when WR Admin reissued the link (the original never arrived, or it
+   * expired). The copy then leads with "here is a fresh link" and says plainly
+   * that older links have stopped working, rather than re-announcing approval
+   * to someone who already knows.
+   */
+  reissued?: boolean;
 }
 
 /** Data the courteous decline email needs. No note, no reasons echoed. */
@@ -127,6 +134,8 @@ export interface DeclineEmailData {
 
 const INTAKE_INVITE_SUBJECT =
   "Your Rogue Raise is approved — let's begin intake";
+
+const INTAKE_REISSUE_SUBJECT = "Here's a fresh link to your Rogue Raise intake";
 
 const DECLINE_SUBJECT = "An update on your Rogue Raise application";
 
@@ -141,6 +150,33 @@ export function buildIntakeInviteEmail(
   const org = escapeHtml(data.orgName);
   const name = escapeHtml(data.pocName);
   const url = escapeHtml(data.intakeUrl);
+
+  if (data.reissued) {
+    const html = [
+      `<p>Hi ${name},</p>`,
+      `<p>Here&rsquo;s a fresh link to the intake form for <strong>${org}</strong>&rsquo;s ` +
+        `Rogue Raise. Everything you&rsquo;d already filled in is still there.</p>`,
+      `<p><a href="${url}">Open your intake form</a></p>`,
+      `<p>Please use this link from now on &mdash; any earlier link we sent has ` +
+        `stopped working. This one is personal to you and expires in 14 days.</p>`,
+      `<p>&mdash; The White Rabbit team</p>`,
+    ].join("\n");
+    const text =
+      `Hi ${data.pocName},\n\n` +
+      `Here's a fresh link to the intake form for ${data.orgName}'s Rogue Raise. ` +
+      `Everything you'd already filled in is still there.\n\n` +
+      `Open your intake form:\n${data.intakeUrl}\n\n` +
+      `Please use this link from now on — any earlier link we sent has stopped ` +
+      `working. This one is personal to you and expires in 14 days.\n\n` +
+      `— The White Rabbit team`;
+    return {
+      to: data.pocEmail,
+      subject: INTAKE_REISSUE_SUBJECT,
+      html,
+      text,
+    };
+  }
+
   const html = [
     `<p>Hi ${name},</p>`,
     `<p>Good news &mdash; the Rogue Raise for <strong>${org}</strong> has been ` +

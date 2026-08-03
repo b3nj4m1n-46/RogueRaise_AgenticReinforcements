@@ -1,0 +1,1 @@
+ALTER TABLE "rogue_raise"."repo_review_comments" ADD COLUMN "asset_id" uuid;

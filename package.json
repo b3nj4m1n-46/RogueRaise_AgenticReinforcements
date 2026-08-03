@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:up": "docker compose up -d",
@@ -14,19 +15,29 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "admin:create": "tsx scripts/create-admin.ts",
+    "db:auth-migrate": "drizzle-kit migrate --config drizzle.auth.config.ts",
+    "db:auth-generate": "drizzle-kit generate --config drizzle.auth.config.ts",
+    "verify:providers": "tsx scripts/verify-providers.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.23",
+    "@vercel/blob": "^2.6.1",
+    "ai": "^7.0.40",
+    "better-auth": "^1.6.25",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
     "postgres": "^3.4.9",
+    "pptxgenjs": "^4.0.1",
     "radix-ui": "^1.6.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.6.0",
+    "workflow": "^4.6.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {

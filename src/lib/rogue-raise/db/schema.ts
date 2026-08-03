@@ -87,6 +87,9 @@ export const assetType = rogueRaise.enum("asset_type", [
   "social_post",
   "landing_page_content",
   "faq",
+  // Phase 4: the categorizer's readable account of what got built. The numeric
+  // stats live on `submissions`; this is the prose that goes with them.
+  "submission_summary",
 ]);
 
 export const reviewStatus = rogueRaise.enum("review_status", [
@@ -289,6 +292,34 @@ export const contextRepos = rogueRaise.table("context_repos", {
   openPrUrl: text("open_pr_url"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
+});
+
+/**
+ * Per-file feedback on a pushed context repo (PRD §5.3.2). Append-only: each
+ * row is one comment, so a file's history reads as a thread rather than a
+ * single overwritten note. `decision` is set on the comment that carried one.
+ */
+export const repoReviewComments = rogueRaise.table("repo_review_comments", {
+  id: pk(),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id),
+  /** Repo-relative path, or null for a comment on the repo as a whole. */
+  filePath: text("file_path"),
+  /**
+   * The draft this comment is about, for stakeholder review of generated assets
+   * (PRD §11.2 `admin_and_stakeholders`). Null for repo/file comments — the two
+   * kinds share this table because they are the same thing at different stages,
+   * but an asset id must never be smuggled through `file_path`.
+   */
+  assetId: uuid("asset_id"),
+  /** Who left it — `wr_admin` or `stakeholder`. */
+  authorRole: text("author_role").notNull(),
+  authorLabel: text("author_label"),
+  body: text("body").notNull(),
+  /** `approve` / `request_changes` / null for a plain comment. */
+  decision: text("decision"),
+  createdAt: createdAt(),
 });
 
 export const agentRuns = rogueRaise.table("agent_runs", {
@@ -517,6 +548,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   judges: many(judges),
   agentRuns: many(agentRuns),
   generatedAssets: many(generatedAssets),
+  repoReviewComments: many(repoReviewComments),
   participants: many(participants),
   teams: many(teams),
   submissions: many(submissions),
@@ -674,6 +706,16 @@ export const magicLinkTokensRelations = relations(
   ({ one }) => ({
     event: one(events, {
       fields: [magicLinkTokens.eventId],
+      references: [events.id],
+    }),
+  }),
+);
+
+export const repoReviewCommentsRelations = relations(
+  repoReviewComments,
+  ({ one }) => ({
+    event: one(events, {
+      fields: [repoReviewComments.eventId],
       references: [events.id],
     }),
   }),

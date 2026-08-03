@@ -17,7 +17,8 @@
  *   - Raw magic-link token appears only in the emailed URL, never in the DB/logs.
  *
  * AUTH: `/admin/*` is env-gated dev-open (see src/middleware.ts). There is no
- * per-admin identity yet, so the audit actor is the `ACTOR_WR_ADMIN` placeholder
+ * Audit rows record the individual admin, so "who approved this sponsor" is
+ * answerable
  * until the Better Auth admin story lands. See HANDOFF.md — this MUST NOT deploy
  * publicly before then.
  */
@@ -36,10 +37,10 @@ import {
 } from "../db/schema";
 import { getEmailAdapter } from "../integrations/email";
 import {
-  ACTOR_WR_ADMIN,
   type AdminDecisionState,
 } from "./admin-decision-state";
 import { buildDeclineEmail, buildIntakeInviteEmail } from "./emails";
+import { adminActor, adminOrError } from "../admin/guard";
 import {
   buildIntakeInviteUrl,
   generateMagicToken,
@@ -56,7 +57,7 @@ import {
 
 // --- Constants & UI-contract types -----------------------------------------
 
-// `ACTOR_WR_ADMIN`, the `AdminDecisionState` type, and `initialAdminDecisionState`
+// The `AdminDecisionState` type and `initialAdminDecisionState`
 // live in `./admin-decision-state` (imported above) because a `"use server"`
 // module may only export async functions — any non-async export throws at
 // runtime ("... can only export async functions, found object").
@@ -88,6 +89,7 @@ type TxOutcome =
 async function decide(
   decision: AdminDecision,
   formData: FormData,
+  actor: string,
 ): Promise<AdminDecisionState> {
   // Never trust a client-sent event id or status — only the application id and
   // the optional note cross the boundary; everything else is resolved server-side.
@@ -179,7 +181,7 @@ async function decide(
       };
       await tx.insert(auditLog).values({
         eventId: event.id,
-        actor: ACTOR_WR_ADMIN,
+        actor,
         action: `sponsor_application.${next.appStatus}`,
         entity: "sponsor_application",
         fromValue: app.status,
@@ -188,7 +190,7 @@ async function decide(
       });
       await tx.insert(auditLog).values({
         eventId: event.id,
-        actor: ACTOR_WR_ADMIN,
+        actor,
         action: `event.${next.eventStatus}`,
         entity: "event",
         fromValue: event.status,
@@ -287,12 +289,22 @@ export async function approveSponsorApplication(
   _prevState: AdminDecisionState,
   formData: FormData,
 ): Promise<AdminDecisionState> {
-  return decide("approve", formData);
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error };
+
+  return decide("approve", formData, adminActor(guard.admin));
 }
 
 export async function rejectSponsorApplication(
   _prevState: AdminDecisionState,
   formData: FormData,
 ): Promise<AdminDecisionState> {
-  return decide("reject", formData);
+  // Authorization is enforced per action, not only by the layout: a Server
+  // Action is reachable without ever rendering the page that hosts it.
+  const guard = await adminOrError();
+  if (!guard.ok) return { ok: false, formError: guard.error };
+
+  return decide("reject", formData, adminActor(guard.admin));
 }
